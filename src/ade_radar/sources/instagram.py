@@ -15,7 +15,7 @@ from pathlib import Path
 from .. import db
 from ..config import Context
 from ..models import Item, SourceBlocked, now
-from .browser import check_wall, chrome, first_page, human_pause, human_scroll
+from .browser import check_wall, chrome, dismiss_cookie_banner, first_page, human_pause, human_scroll
 
 log = logging.getLogger(__name__)
 
@@ -156,6 +156,7 @@ def collect(ctx: Context, conn, counts: dict, force: bool = False, dry_run: bool
         page = first_page(browser)
         page.goto(FEED_URL, wait_until="domcontentloaded", timeout=60_000)
         human_pause(4, 7)
+        dismiss_cookie_banner(page)
         _raise_if_wall(page)
         _ensure_following_feed(page)
         items += collect_feed(page, conn, shots, limit, counts)
@@ -348,6 +349,8 @@ def login(ctx: Context) -> None:
     with chrome(ctx.settings, fit_window=True) as browser:
         page = first_page(browser)
         page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
+        human_pause(3, 4)
+        dismiss_cookie_banner(page)
         print("Chrome is open with the radar profile.\n"
               "Log in by hand with the SEPARATE Instagram account (never your personal one),\n"
               "accept or decline the cookie banner (scroll down inside it for the buttons),\n"
@@ -363,6 +366,7 @@ def inspect(ctx: Context) -> Path:
         page = first_page(browser)
         page.goto(FEED_URL, wait_until="domcontentloaded", timeout=60_000)
         human_pause(5, 7)
+        dismiss_cookie_banner(page)
         page.screenshot(path=str(out / "feed.png"))
         (out / "feed.html").write_text(page.content(), encoding="utf-8")
         import json

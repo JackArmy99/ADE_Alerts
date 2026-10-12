@@ -71,3 +71,22 @@ def test_record_suggestions(conn, ctx):
     assert set(rows) == {"tinybrand.ams"}  # followed authors and accounts.yaml handles are not suggested
     assert rows["tinybrand.ams"]["times_seen"] == 2
     assert rows["tinybrand.ams"]["seen_via"] == "socialpleasure,kettama"
+
+
+@pytest.mark.skipif(not CHROMIUM.exists(), reason="no local chromium")
+def test_cookie_banner_dismissed_even_below_the_fold():
+    from playwright.sync_api import sync_playwright
+    from ade_radar.sources.browser import dismiss_cookie_banner
+
+    html = ('<div style="height:2500px">Optional cookies</div>'
+            '<button onclick="document.title=\'declined\'">Decline optional cookies</button>'
+            '<button onclick="document.title=\'allowed\'">Allow all cookies</button>')
+    with sync_playwright() as p:
+        b = p.chromium.launch(executable_path=str(CHROMIUM), headless=True)
+        page = b.new_page(viewport={"width": 800, "height": 600})
+        page.set_content(html)
+        assert dismiss_cookie_banner(page)
+        assert page.title() == "declined"
+        page.set_content("<p>no banner</p>")
+        assert not dismiss_cookie_banner(page)
+        b.close()

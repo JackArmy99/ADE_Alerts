@@ -51,6 +51,28 @@ def chrome(s: Settings, headless: bool = False, fit_window: bool = False):
                 pass
 
 
+COOKIE_BUTTONS = re.compile(r"^(Decline optional cookies|Only allow essential cookies|Allow all cookies|"
+                            r"Optionele cookies weigeren|Alle cookies toestaan)$", re.I)
+
+
+def dismiss_cookie_banner(page) -> bool:
+    """Click through Instagram's cookie consent dialog (prefers declining optional cookies)."""
+    try:
+        btns = page.get_by_role("button", name=COOKIE_BUTTONS)
+        if not btns.count():
+            return False
+        decline = page.get_by_role("button", name=re.compile(r"Decline optional|essential|weigeren", re.I))
+        target = decline.first if decline.count() else btns.first
+        target.scroll_into_view_if_needed(timeout=3000)
+        target.click(timeout=5000)
+        human_pause(1, 2)
+        log.info("cookie banner dismissed")
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.warning("could not dismiss cookie banner: %s", e)
+        return False
+
+
 def first_page(ctx):
     return ctx.pages[0] if ctx.pages else ctx.new_page()
 
