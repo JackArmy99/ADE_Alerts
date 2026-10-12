@@ -99,3 +99,22 @@ def test_every_alert_has_a_link():
     tickets = Classification(links=["https://dice.fm/event/x"])
     assert best_link(story, tickets) == "https://dice.fm/event/x"
     assert best_link(Item("gmail", "1", author="RA <x@ra.co>"), cls).startswith("https://")
+
+
+def test_failed_whatsapp_goes_to_ntfy_once_and_is_retried(conn, ctx, monkeypatch):
+    from .conftest import FakeWA
+    from ade_radar.alerts import retry_failed
+    from ade_radar.notify import ntfy
+    notices = []
+    monkeypatch.setattr(ntfy, "send", lambda s, msg, **kw: notices.append(kw["title"]) or True)
+    wa = FakeWA(fail_codes=[131049, 131049])
+    stats, _ = run(conn, ctx, [flyer("7")], wa, [json.dumps(GOOD)])
+    assert stats.failed == 2 and len(notices) == 2  # one notice per person
+    wa.fail = [131049]  # next run: jack still refused, friend1 goes through
+    s2 = AlertStats()
+    retry_failed(conn, ctx, wa, s2)
+    assert s2.sent == 1 and s2.failed == 1 and len(notices) == 2  # no repeat notice
+    s3 = AlertStats()
+    retry_failed(conn, ctx, wa, s3)
+    assert s3.sent == 1 and len(wa.sent) == 2
+    assert retry_failed(conn, ctx, wa, AlertStats()) is None and len(wa.sent) == 2  # nothing left

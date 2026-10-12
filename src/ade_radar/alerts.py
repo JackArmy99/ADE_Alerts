@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 from dataclasses import dataclass
+from datetime import timedelta
 
 from .config import Context
 from .db import ts
@@ -111,14 +113,45 @@ def sent_today(conn, recipient: str) -> int:
                         " AND substr(sent_at,1,10)=?", (recipient, day)).fetchone()[0]
 
 
-def _record(conn, item_id, rh, recipient, urgency, status, mid="", error=""):
+def _record(conn, item_id, rh, recipient, urgency, status, mid="", error="", params=None):
     conn.execute(
-        "INSERT INTO alerts (item_id, reason_hash, recipient, urgency, sent_at, wa_message_id, status, error)"
-        " VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(item_id, reason_hash, recipient) DO UPDATE SET"
+        "INSERT INTO alerts (item_id, reason_hash, recipient, urgency, sent_at, wa_message_id, status, error,"
+        " params, attempts) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(item_id, reason_hash, recipient) DO UPDATE SET"
         " urgency=excluded.urgency, sent_at=excluded.sent_at, wa_message_id=excluded.wa_message_id,"
-        " status=excluded.status, error=excluded.error",
-        (item_id, rh, recipient, urgency, ts(), mid, status, error[:500]),
+        " status=excluded.status, error=excluded.error, params=COALESCE(excluded.params, alerts.params),"
+        " attempts=alerts.attempts + excluded.attempts",
+        (item_id, rh, recipient, urgency, ts(), mid, status, error[:500],
+         json.dumps(params, ensure_ascii=False) if params else None, 0 if status == "dry_run" else 1),
     )
+
+
+MAX_ATTEMPTS = 5
+RETRY_HOURS = 24
+
+
+def retry_failed(conn, ctx: Context, wa: WhatsApp, stats: AlertStats) -> None:
+    """Resend alerts that failed earlier (WhatsApp down, token issue, Meta holding back a message)."""
+    s = ctx.settings
+    since = (now() - timedelta(hours=RETRY_HOURS)).isoformat(timespec="seconds")
+    rows = conn.execute("SELECT * FROM alerts WHERE status='failed' AND attempts < ? AND sent_at >= ?"
+                        " AND params IS NOT NULL", (MAX_ATTEMPTS, since)).fetchall()
+    for r in rows:
+        if _already(conn, "", r["reason_hash"], r["recipient"]):
+            _record(conn, r["item_id"], r["reason_hash"], r["recipient"], r["urgency"], "superseded")
+            continue
+        phone = s.recipients.get(r["recipient"])
+        if not phone:
+            continue
+        params = json.loads(r["params"])
+        res = wa.send_template(phone, params)
+        if res.ok:
+            stats.sent += 1
+            _record(conn, r["item_id"], r["reason_hash"], r["recipient"], r["urgency"], "sent", res.message_id)
+            log.info("retried alert sent to %s: %s", r["recipient"], params[0])
+        else:
+            stats.failed += 1
+            _record(conn, r["item_id"], r["reason_hash"], r["recipient"], r["urgency"], "failed", error=res.error)
+        conn.commit()
 
 
 def dispatch(conn, ctx: Context, wa: WhatsApp | None, item: Item, cls: Classification, d: Decision,
@@ -151,11 +184,18 @@ def dispatch(conn, ctx: Context, wa: WhatsApp | None, item: Item, cls: Classific
         if res.ok:
             stats.sent += 1
             sent_now += 1
-            _record(conn, item.id, rh, person, d.urgency, "sent", res.message_id)
+            _record(conn, item.id, rh, person, d.urgency, "sent", res.message_id, params=params)
             log.info("alert sent to %s: %s", person, params[0])
         else:
             stats.failed += 1
-            _record(conn, item.id, rh, person, d.urgency, "failed", error=res.error)
+            first_failure = conn.execute("SELECT 1 FROM alerts WHERE item_id=? AND reason_hash=? AND recipient=?",
+                                         (item.id, rh, person)).fetchone() is None
+            _record(conn, item.id, rh, person, d.urgency, "failed", error=res.error, params=params)
+            if first_failure:
+                # Don't lose the alert while WhatsApp refuses it (e.g. 131049 marketing limit); retried next run.
+                ntfy.send(s, f"For {person}. WhatsApp failed ({res.error[:120]}).\n\n{render(params, s.wa_body_params)}",
+                          title=f"ADE {d.urgency} (WhatsApp failed): {params[0][:50]}",
+                          priority="urgent" if d.urgency == "urgent" else "default")
         conn.commit()
     if not dry_run and s.wa_template == "hello_world" and sent_now:
         # Template not approved yet: hello_world carries no details, so mirror the alert to ntfy.

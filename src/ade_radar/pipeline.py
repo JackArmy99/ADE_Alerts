@@ -7,7 +7,7 @@ import logging
 import traceback
 
 from . import db
-from .alerts import AlertStats, dispatch
+from .alerts import AlertStats, dispatch, retry_failed
 from .classify import Classifier, rules_classification
 from .config import Context
 from .dedupe import upsert_event
@@ -109,6 +109,11 @@ def run_source(ctx: Context, source: str, dry_run: bool = False, force: bool = F
             conn.rollback()  # unprocessed items stay unseen and are picked up next run
         else:
             conn.commit()
+    if wa is not None:
+        try:
+            retry_failed(conn, ctx, wa, stats)
+        except Exception:  # noqa: BLE001
+            log.error("retrying failed alerts failed:\n%s", traceback.format_exc())
     counts.update({"alerts_" + k: v for k, v in stats.as_dict().items()})
     counts.update({"claude_" + k: v for k, v in classifier.usage.as_dict().items()})
     db.finish_run(conn, run_id, ok, counts, error)

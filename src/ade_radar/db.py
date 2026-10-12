@@ -103,8 +103,17 @@ def connect(path: Path | str) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=30000")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     conn.commit()
     return conn
+
+
+def _migrate(conn) -> None:
+    """Columns added after the first release (databases created earlier lack them)."""
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(alerts)")}
+    for col, decl in (("params", "TEXT"), ("attempts", "INTEGER DEFAULT 0")):
+        if col not in have:
+            conn.execute(f"ALTER TABLE alerts ADD COLUMN {col} {decl}")
 
 
 def ts() -> str:
