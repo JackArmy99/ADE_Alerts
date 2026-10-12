@@ -17,6 +17,7 @@ MAX_PARAM = 150
 
 HINTS = {
     131030: "recipient is not on the test number's allow list (add + verify it in Meta API Setup)",
+    131049: "Meta held back a marketing message (per-user marketing limit); a Utility template avoids this",
     132001: "template does not exist in this language: check WHATSAPP_TEMPLATE_LANG with check-template",
     132000: "wrong number of template parameters",
     132015: "template is paused",
@@ -41,6 +42,22 @@ def clean_param(s: str, limit: int = MAX_PARAM) -> str:
     if len(s) > limit:
         s = s[: limit - 1].rstrip() + "…"
     return s
+
+
+def fit_params(params: list[str], n: int, limit: int = MAX_PARAM) -> list[str]:
+    """Fit our 4 values (event, when, where, details+link) into a template with n body parameters.
+    Extra values are joined into the last one; the final value (which ends with the link) is kept whole and
+    the text before it is shortened instead."""
+    if n <= 0 or len(params) <= n:
+        return params
+    head, tail = params[: n - 1], params[n - 1:]
+    last, before = tail[-1], " | ".join(tail[:-1])
+    room = limit - len(last) - 3
+    if room < 4:
+        return head + [clean_param(last, limit)]
+    if len(before) > room:
+        before = before[: room - 1].rstrip() + "…"
+    return head + [f"{before} | {last}"]
 
 
 def detail_param(detail: str, link: str | None, limit: int = MAX_PARAM) -> str:
@@ -89,6 +106,8 @@ class WhatsApp:
         template = template or self.s.wa_template
         if template == "hello_world":
             lang, params = lang or "en_US", None
+        elif params:
+            params = fit_params(params, self.s.wa_body_params)
         payload = self.template_payload(to, template, lang or self.s.wa_template_lang, params)
         url = f"{GRAPH}/{self.s.wa_api_version}/{self.s.wa_phone_number_id}/messages"
         return self._post(url, payload)

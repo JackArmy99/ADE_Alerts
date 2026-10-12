@@ -13,7 +13,7 @@ from .match import Decision
 from .models import Classification, Item, now
 from .normalize import compact, pretty_when
 from .notify import ntfy
-from .notify.whatsapp import WhatsApp, clean_param, detail_param
+from .notify.whatsapp import WhatsApp, clean_param, detail_param, fit_params
 
 log = logging.getLogger(__name__)
 
@@ -72,8 +72,11 @@ def template_params(item: Item, cls: Classification, d: Decision, detail: str | 
             detail_param(detail, best_link(item, cls))]
 
 
-def render(params: list[str]) -> str:
-    return TEMPLATE_TEXT.format(*params)
+def render(params: list[str], n_params: int = 4) -> str:
+    """Readable preview of what WhatsApp will show, fitted to the template's parameter count."""
+    if n_params == 4 and len(params) == 4:
+        return TEMPLATE_TEXT.format(*params)
+    return "\n".join(f"{{{{{i}}}}} {p}" for i, p in enumerate(fit_params(params, n_params), 1))
 
 
 @dataclass
@@ -130,7 +133,7 @@ def dispatch(conn, ctx: Context, wa: WhatsApp | None, item: Item, cls: Classific
             continue
         phone = s.recipients.get(person)
         if dry_run:
-            print(f"\n--- [dry-run] WhatsApp to {person} ({d.urgency}) ---\n{render(params)}\n")
+            print(f"\n--- [dry-run] WhatsApp to {person} ({d.urgency}) ---\n{render(params, s.wa_body_params)}\n")
             log.info("[dry-run] WhatsApp to %s (%s): %s", person, d.urgency, " | ".join(params))
             _record(conn, item.id, rh, person, d.urgency, "dry_run")
             stats.dry_run += 1
@@ -151,5 +154,5 @@ def dispatch(conn, ctx: Context, wa: WhatsApp | None, item: Item, cls: Classific
         conn.commit()
     if not dry_run and s.wa_template == "hello_world" and sent_now:
         # Template not approved yet: hello_world carries no details, so mirror the alert to ntfy.
-        ntfy.send(s, render(params), title=f"ADE {d.urgency}: {params[0][:60]}",
+        ntfy.send(s, render(params, s.wa_body_params), title=f"ADE {d.urgency}: {params[0][:60]}",
                   priority="urgent" if d.urgency == "urgent" else "default")

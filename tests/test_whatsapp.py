@@ -64,3 +64,22 @@ def test_body_param_count():
     t = {"components": [{"type": "HEADER", "text": "Up the scouse"},
                         {"type": "BODY", "text": "Event: {{1}} When: {{2}} Where: {{3}} Details: {{4}}"}]}
     assert body_param_count(t) == 4
+
+
+def test_fit_params_three_slot_template_keeps_link():
+    from ade_radar.notify.whatsapp import fit_params
+    link = "https://dice.fm/event/abc123-social-pleasure-ade"
+    p = ["Social Pleasure ADE pop-up", "Thu 22 Oct 23:00", "A'DAM Toren " + "x" * 120,
+         "URGENT: presale sign-up open: " + link]
+    out = fit_params(p, 3)
+    assert len(out) == 3 and out[:2] == p[:2]
+    assert out[2].endswith(link) and len(out[2]) <= 150 and out[2].startswith("A'DAM Toren")
+    assert fit_params(p, 4) == p
+
+
+def test_three_param_template_payload(ctx):
+    sess = Session([Resp(200, {"messages": [{"id": "w"}]})])
+    ctx.settings.wa_body_params = 3
+    WhatsApp(ctx.settings, session=sess).send_template("1", ["A", "B", "C", "URGENT: x: https://l.ink"])
+    params = sess.calls[0][2]["template"]["components"][0]["parameters"]
+    assert [p["text"] for p in params] == ["A", "B", "C | URGENT: x: https://l.ink"]

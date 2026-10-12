@@ -26,13 +26,19 @@ def check_template(ctx: Context) -> dict | None:
         print(f"name={t.get('name')}  status={t.get('status')}  language={t.get('language')}  "
               f"category={t.get('category')}  body params={body_param_count(t)}")
         print(json.dumps(t.get("components", []), indent=2, ensure_ascii=False))
+    t0 = found[0]
+    n = body_param_count(t0)
+    if n != s.wa_body_params:
+        print(f"!! Body has {n} parameters: set WHATSAPP_TEMPLATE_PARAMS={n} in .env"
+              + (" (details + link then go on the last line)" if n == 3 else ""))
+    if str(t0.get("category", "")).upper() == "MARKETING":
+        print("!! Category is MARKETING: Meta may hold back some marketing messages per person (error 131049)"
+              " and people can mute them. A UTILITY template is more reliable for alerts.")
+    if t0.get("language") != s.wa_template_lang:
+        print(f"!! Set WHATSAPP_TEMPLATE_LANG={t0.get('language')} in .env (currently {s.wa_template_lang})")
     active = [t for t in found if t.get("status") == "APPROVED"]
     if active:
         t = active[0]
-        if t.get("language") != s.wa_template_lang:
-            print(f"!! Set WHATSAPP_TEMPLATE_LANG={t.get('language')} in .env (currently {s.wa_template_lang})")
-        if body_param_count(t) != 4:
-            print(f"!! Body has {body_param_count(t)} parameters; the radar sends 4. Update alerts.template_params.")
         if s.wa_template != t.get("name"):
             print(f"!! Template is approved: set WHATSAPP_TEMPLATE={t.get('name')} in .env")
         return t

@@ -42,6 +42,7 @@ class Settings:
     wa_api_version: str = "v25.0"
     wa_template: str = "ade_alert"
     wa_template_lang: str = "en"
+    wa_body_params: int = 4  # body {{n}} parameters of the approved template (check-template tells you)
     recipients: dict[str, str] = field(default_factory=dict)  # name -> phone
     gmail_address: str = ""
     gmail_app_password: str = ""
@@ -99,6 +100,7 @@ def load_settings(root: Path | None = None) -> Settings:
         wa_api_version=e("WHATSAPP_API_VERSION") or "v25.0",
         wa_template=e("WHATSAPP_TEMPLATE") or "ade_alert",
         wa_template_lang=e("WHATSAPP_TEMPLATE_LANG") or "en",
+        wa_body_params=int(e("WHATSAPP_TEMPLATE_PARAMS") or 4),
         recipients=recipients,
         gmail_address=e("GMAIL_ADDRESS", ""),
         gmail_app_password=(e("GMAIL_APP_PASSWORD") or "").replace(" ", ""),
