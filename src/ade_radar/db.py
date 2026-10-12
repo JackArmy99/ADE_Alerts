@@ -79,6 +79,15 @@ CREATE TABLE IF NOT EXISTS ade_snapshots (
     json TEXT NOT NULL,
     updated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS teasers (
+    item_id TEXT PRIMARY KEY,
+    author TEXT,
+    url TEXT,
+    summary TEXT,
+    persons TEXT,
+    created_at TEXT,
+    digested_at TEXT
+);
 CREATE TABLE IF NOT EXISTS kv (
     key TEXT PRIMARY KEY,
     value TEXT
@@ -168,6 +177,11 @@ def ig_mark_seen(conn, permalink: str, author: str) -> None:
 
 def ig_seen_count(conn) -> int:
     return conn.execute("SELECT COUNT(*) FROM ig_seen").fetchone()[0]
+
+
+def save_teaser(conn, item_id: str, author: str, url: str, summary: str, persons: list[str]) -> None:
+    conn.execute("INSERT OR IGNORE INTO teasers (item_id, author, url, summary, persons, created_at)"
+                 " VALUES (?,?,?,?,?,?)", (item_id, author, url, summary[:200], ",".join(persons), ts()))
 
 
 def note_suggestion(conn, handle: str, via: str) -> None:

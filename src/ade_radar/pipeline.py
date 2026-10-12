@@ -60,6 +60,10 @@ def _process_one(conn, ctx: Context, item: Item, matcher: Matcher, today: str, *
     log.info("%s %s @%s -> %s %s %s | %s | %s", item.source, item.external_id, item.author,
              "ALERT" if d.send else "skip", d.urgency, d.recipients or "", d.reason or cls.reason,
              cls.event_name or "")
+    if d.urgency == "teaser":
+        summary = cls.event_name or ", ".join(cls.artists[:3]) or ""
+        db.save_teaser(conn, item.id, item.author, item.url, f"{summary} - {d.reason}".strip(" -"), d.recipients)
+        counts["teasers"] = counts.get("teasers", 0) + 1
     if not d.send:
         return
     event_id, _ = upsert_event(conn, cls, item.id)

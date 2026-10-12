@@ -107,6 +107,9 @@ def account_for_handle(handle: str | None, accounts: list[Account]) -> Account |
 
 # ---- decision ----------------------------------------------------------
 
+ACTIONABLE = ("presale_signup", "waitlist", "second_date", "resale", "on_sale")
+
+
 @dataclass
 class Decision:
     send: bool
@@ -126,15 +129,20 @@ def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Dec
         return Decision(False, reason="not ADE related")
 
     persons = ({p for p in cls.relevant_for if p in known} | m.persons) & set(known)
-    urgent = cls.urgency == "urgent"
     why = []
+    # Claude's "urgent" only counts with something to act on: a ticket signal, an urgent keyword, a priority
+    # account, or a reveal for a must_see artist. "Playing ADE" on its own is not urgent.
+    actionable = cls.ticket_status in ACTIONABLE
+    must_see_reveal = cls.is_event_announcement and any(m.must_see_for(p) for p in persons)
+    urgent = cls.urgency == "urgent" and (actionable or bool(m.urgent_keywords) or m.priority_urgent
+                                          or must_see_reveal)
     if m.urgent_keywords and (persons or m.account or cls.is_event_announcement):
         urgent = True
         why.append("keywords: " + ", ".join(m.urgent_keywords[:3]))
     if m.priority_urgent and item.source.startswith("instagram"):
         urgent = True
         why.append(f"priority account {m.account.name}")
-    if cls.ticket_status in ("presale_signup", "waitlist", "second_date", "resale") and (persons or m.account):
+    if actionable and cls.ticket_status != "on_sale" and (persons or m.account):
         urgent = True
 
     if urgent:
@@ -151,8 +159,17 @@ def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Dec
         return Decision(False, reason="no matching taste")
     if used_claude and not cls.is_event_announcement and cls.urgency == "ignore":
         return Decision(False, reason=cls.reason or "not an announcement")
+    if not has_details(item, cls):
+        # "show at ADE" with no date, venue or link: goes to the 09:00 digest instead of WhatsApp
+        return Decision(False, "teaser", _ordered(persons, known), "teaser", cls.reason or "ADE mention, no details")
     kind = cls.ticket_status if cls.ticket_status in ("sold_out",) else "announce"
     return Decision(True, "normal", _ordered(persons, known), kind, cls.reason)
+
+
+def has_details(item: Item, cls: Classification) -> bool:
+    if item.source == "ade":
+        return True
+    return bool(cls.date or cls.venue or cls.links or cls.ticket_status != "unknown")
 
 
 def _ordered(names, known: list[str]) -> list[str]:

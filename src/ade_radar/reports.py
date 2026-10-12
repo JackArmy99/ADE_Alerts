@@ -51,17 +51,42 @@ def heartbeat(ctx: Context, dry_run: bool = False) -> str:
 
 
 def digest(ctx: Context, dry_run: bool = False, limit: int = 15) -> str:
+    """09:00 digest for Jack: ADE teasers (mentions without details) and suggested follows."""
     s = ctx.settings
     conn = db.connect(s.db_path)
+    out = [teaser_digest(conn, ctx, dry_run, limit), follows_digest(conn, ctx, dry_run, limit)]
+    if not dry_run:
+        conn.commit()
+    conn.close()
+    return "\n\n".join(x for x in out if x) or "nothing new for the digest"
+
+
+def teaser_digest(conn, ctx: Context, dry_run: bool, limit: int) -> str:
+    rows = conn.execute("SELECT * FROM teasers WHERE digested_at IS NULL ORDER BY created_at LIMIT ?",
+                        (limit,)).fetchall()
+    if not rows:
+        return ""
+    lines = [f"@{r['author']}: {r['summary']} {r['url']}".strip() for r in rows]
+    full = "ADE teasers (no date/venue/link yet):\n" + "\n".join(lines)
+    ntfy.send(ctx.settings, full, title=f"ade-radar: {len(rows)} ADE teasers", dry_run=dry_run)
+    short = "; ".join(f"@{r['author']}" for r in rows)
+    params = ["ADE teasers (no details yet)", now().strftime("%a %d %b"), f"{len(rows)} posts",
+              clean_param("Watch: " + short)]
+    _to_owner(ctx, params, dry_run)
+    if not dry_run:
+        conn.executemany("UPDATE teasers SET digested_at=? WHERE item_id=?", [(db.ts(), r["item_id"]) for r in rows])
+    return full
+
+
+def follows_digest(conn, ctx: Context, dry_run: bool, limit: int) -> str:
     rows = conn.execute("SELECT * FROM suggested_follows WHERE suggested_at IS NULL ORDER BY times_seen DESC,"
                         " first_seen LIMIT ?", (limit,)).fetchall()
     if not rows:
-        conn.close()
-        return "no new suggestions"
+        return ""
     lines = [f"@{r['handle']} x{r['times_seen']} via {', '.join('@' + v for v in (r['seen_via'] or '').split(',')[:3] if v)}"
              for r in rows]
-    full = "\n".join(lines)
-    ntfy.send(s, full, title=f"ade-radar: {len(rows)} suggested follows", dry_run=dry_run)
+    full = "Suggested follows:\n" + "\n".join(lines)
+    ntfy.send(ctx.settings, full, title=f"ade-radar: {len(rows)} suggested follows", dry_run=dry_run)
     short = "; ".join(f"@{r['handle']} x{r['times_seen']}" for r in rows)
     params = ["Suggested follows (not an event)", now().strftime("%a %d %b"), f"{len(rows)} new accounts",
               clean_param(short)]
@@ -69,8 +94,6 @@ def digest(ctx: Context, dry_run: bool = False, limit: int = 15) -> str:
     if not dry_run:
         conn.executemany("UPDATE suggested_follows SET suggested_at=? WHERE handle=?",
                          [(db.ts(), r["handle"]) for r in rows])
-        conn.commit()
-    conn.close()
     return full
 
 

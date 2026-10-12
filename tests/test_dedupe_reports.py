@@ -31,3 +31,14 @@ def test_heartbeat_summary(conn):
     text, healthy = heartbeat_summary(conn)
     assert "instagram 1/1 ok" in text and "gmail 0/1 ok" in text and "Claude calls 5" in text
     assert not healthy
+
+
+def test_teasers_go_to_digest_once(ctx, conn, capsys):
+    from ade_radar.reports import digest
+    db.save_teaser(conn, "i1", "ewanmcvicar_", "https://www.instagram.com/p/DeZF5xVjEIL/",
+                   "teaser: mentions an ADE show, no details", ["jack"])
+    conn.commit()
+    ctx.settings.wa_token = ""  # no WhatsApp in tests
+    text = digest(ctx)
+    assert "@ewanmcvicar_: teaser" in text and "DeZF5xVjEIL" in text
+    assert digest(ctx) == "nothing new for the digest"

@@ -37,8 +37,12 @@ Return ONLY one JSON object with these fields:
 - urgency: "urgent" when ANY of: presale, pre-registration, sign-up, register, waitlist / waiting list,
   second date / extra show / added date, extra tickets / final release, resale / ticketswap,
   "link in bio" + ADE, secret / special guest reveal for a must_see artist, or any ADE-related post by an
-  account listed as priority urgent below. "normal" for other ADE event announcements that match someone's
-  taste. "ignore" for everything else.
+  account listed as priority urgent below. The signal must be in THIS item: an artist merely saying they
+  play ADE / have "a show in Amsterdam for ADE" is not urgent. "normal" for other ADE event announcements
+  that match someone's taste. "ignore" for everything else.
+- Recaps of past events, thank-you posts and residency wrap-ups are not announcements
+  (is_event_announcement=false), even when they mention an upcoming ADE show in passing. Put that mention in
+  reason (e.g. "teaser: mentions an ADE show, no details") and leave date/venue/links empty.
 - relevant_for: names of the people (keys under `people` in the taste file) whose must_see, like or
   brands_like lists (or clearly matching genres) fit this event. Use only names from the taste file.
 - reason: one short sentence.
