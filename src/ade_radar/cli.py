@@ -44,6 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--propose", action="store_true", help="look up handles and write --file for review")
     sub.add_parser("ade-discover", help="find the JSON endpoint behind the ADE filter page")
     sub.add_parser("status", help="last runs per source and alert counts")
+    sub.add_parser("email-report", help="per sender: are the ADE emails timely and useful?")
 
     args = ap.parse_args(argv)
     ctx = load_context()
@@ -105,6 +106,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "ade-discover":
         from .sources import ade
         print(f"saved to {ade.discover(ctx)}")
+        return 0
+    if args.cmd == "email-report":
+        from . import db
+        from .reports import email_report
+        conn = db.connect(s.db_path)
+        print(email_report(conn))
+        conn.close()
         return 0
     if args.cmd == "status":
         return status(ctx)

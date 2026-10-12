@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import statistics
+from datetime import datetime
+from email.utils import parseaddr
 from datetime import timedelta
 
 from . import db
@@ -12,6 +15,49 @@ from .notify import ntfy
 from .notify.whatsapp import WhatsApp, clean_param, detail_param
 
 SOURCES = ("instagram", "gmail", "ade")
+
+
+def _domain(author: str) -> str:
+    addr = parseaddr(author or "")[1].lower()
+    host = addr.split("@")[-1] if "@" in addr else ""
+    parts = host.split(".")
+    return ".".join(parts[-2:]) if len(parts) >= 2 else (host or "unknown")
+
+
+def email_report(conn) -> str:
+    """Per email sender: how many events the mails brought, how often the email was first, and how many hours
+    after the first source (Instagram / ADE programme) the email reached the radar."""
+    by_id = {r["id"]: r for r in conn.execute("SELECT id, source, author, first_seen FROM items")}
+    stats: dict[str, dict] = {}
+    for r in conn.execute("SELECT id, author FROM items WHERE source='gmail'"):
+        d = stats.setdefault(_domain(r["author"]), {"mails": 0, "alerts": 0, "events": 0, "first": 0, "lags": []})
+        d["mails"] += 1
+        if conn.execute("SELECT 1 FROM alerts WHERE item_id=? AND status='sent' LIMIT 1", (r["id"],)).fetchone():
+            d["alerts"] += 1
+    for ev in conn.execute("SELECT sources FROM events"):
+        rows = [by_id[i] for i in json.loads(ev["sources"] or "[]") if i in by_id]
+        mails = [r for r in rows if r["source"] == "gmail"]
+        others = [r for r in rows if r["source"] != "gmail"]
+        for m in mails:
+            d = stats.setdefault(_domain(m["author"]), {"mails": 0, "alerts": 0, "events": 0, "first": 0, "lags": []})
+            d["events"] += 1
+            if not others:
+                d["first"] += 1
+                continue
+            t_mail = datetime.fromisoformat(m["first_seen"])
+            t_first = min(datetime.fromisoformat(o["first_seen"]) for o in others)
+            if t_mail <= t_first:
+                d["first"] += 1
+            else:
+                d["lags"].append((t_mail - t_first).total_seconds() / 3600)
+    if not stats:
+        return "Email report: no ADE emails processed yet."
+    lines = ["Email report (since the radar started):"]
+    for dom, d in sorted(stats.items(), key=lambda x: -x[1]["mails"]):
+        lag = f", otherwise median {statistics.median(d['lags']):.1f}h later" if d["lags"] else ""
+        lines.append(f"{dom}: {d['mails']} mails, {d['alerts']} led to an alert; matched {d['events']} events, "
+                     f"first source for {d['first']}{lag}")
+    return "\n".join(lines)
 
 
 def heartbeat_summary(conn) -> tuple[str, bool]:
@@ -55,6 +101,9 @@ def digest(ctx: Context, dry_run: bool = False, limit: int = 15) -> str:
     s = ctx.settings
     conn = db.connect(s.db_path)
     out = [teaser_digest(conn, ctx, dry_run, limit), follows_digest(conn, ctx, dry_run, limit)]
+    report = email_report(conn)
+    ntfy.send(s, report, title="ade-radar: email report", dry_run=dry_run)
+    out.append(report)
     if not dry_run:
         conn.commit()
     conn.close()

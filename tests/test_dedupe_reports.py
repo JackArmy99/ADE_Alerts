@@ -41,4 +41,21 @@ def test_teasers_go_to_digest_once(ctx, conn, capsys):
     ctx.settings.wa_token = ""  # no WhatsApp in tests
     text = digest(ctx)
     assert "@ewanmcvicar_: teaser" in text and "DeZF5xVjEIL" in text
-    assert digest(ctx) == "nothing new for the digest"
+    assert "ewanmcvicar_" not in digest(ctx)  # teasers are only listed once
+
+
+def test_email_report_measures_lag(conn):
+    import json as _json
+    from ade_radar.models import Item
+    from ade_radar.reports import email_report
+    ig = Item("instagram", "p1", author="joshbaker")
+    ra = Item("gmail", "1:5", author="Resident Advisor <noreply@ra.co>")
+    dice = Item("gmail", "1:6", author="DICE <hello@mail.dice.fm>")
+    for it, t in ((ig, "2026-10-12T10:00:00+02:00"), (ra, "2026-10-12T13:00:00+02:00"),
+                  (dice, "2026-10-12T09:00:00+02:00")):
+        db.save_item(conn, it)
+        conn.execute("UPDATE items SET first_seen=? WHERE id=?", (t, it.id))
+    conn.execute("INSERT INTO events (title, sources) VALUES (?,?)", ("Josh Baker", _json.dumps([ig.id, ra.id, dice.id])))
+    rep = email_report(conn)
+    assert "ra.co: 1 mails, 0 led to an alert; matched 1 events, first source for 0, otherwise median 3.0h later" in rep
+    assert "dice.fm: 1 mails" in rep and "first source for 1" in rep.split("dice.fm")[1]
