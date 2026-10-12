@@ -57,8 +57,9 @@ def _process_one(conn, ctx: Context, item: Item, matcher: Matcher, today: str, *
                            item.tagged)
         m.hits.update({p: h for p, h in m2.hits.items() if p not in m.hits})
     d = decide(item, cls, m, ctx)
-    log.info("%s %s @%s -> %s %s %s", item.source, item.external_id, item.author,
-             "ALERT" if d.send else "skip", d.urgency, d.recipients or d.reason)
+    log.info("%s %s @%s -> %s %s %s | %s | %s", item.source, item.external_id, item.author,
+             "ALERT" if d.send else "skip", d.urgency, d.recipients or "", d.reason or cls.reason,
+             cls.event_name or "")
     if not d.send:
         return
     event_id, _ = upsert_event(conn, cls, item.id)
