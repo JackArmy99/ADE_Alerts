@@ -1,0 +1,91 @@
+"""Headed installed-Chrome with the persistent Instagram profile."""
+
+from __future__ import annotations
+
+import logging
+import random
+import re
+import time
+from contextlib import contextmanager
+
+from ..config import Settings
+
+log = logging.getLogger(__name__)
+
+WALL_URL = re.compile(r"/accounts/login|/challenge|/checkpoint|/accounts/suspended|/auth_platform|/accounts/disabled")
+WALL_TEXT = [
+    "try again later",
+    "we restrict certain activity",
+    "suspicious activity",
+    "your account has been suspended",
+    "confirm it's you",
+    "help us confirm",
+    "probeer het later opnieuw",
+    "action blocked",
+]
+
+
+@contextmanager
+def chrome(s: Settings, headless: bool = False):
+    from playwright.sync_api import sync_playwright
+
+    s.ig_profile_dir.mkdir(parents=True, exist_ok=True)
+    with sync_playwright() as p:
+        try:
+            ctx = p.chromium.launch_persistent_context(
+                str(s.ig_profile_dir), channel="chrome", headless=headless,
+                viewport={"width": 1280, "height": 1000}, locale="en-GB", timezone_id="Europe/Amsterdam",
+                args=["--disable-blink-features=AutomationControlled"],
+            )
+        except Exception as e:  # noqa: BLE001
+            raise RuntimeError(f"could not start installed Chrome (is Google Chrome installed?): {e}") from e
+        try:
+            yield ctx
+        finally:
+            try:
+                ctx.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def first_page(ctx):
+    return ctx.pages[0] if ctx.pages else ctx.new_page()
+
+
+def wall_reason(url: str, dialog_text: str, body_text: str = "") -> str | None:
+    """Pure check used by check_wall (and tests)."""
+    if WALL_URL.search(url or ""):
+        return f"redirected to {WALL_URL.search(url).group(0)}"
+    d = (dialog_text or "").lower()
+    for t in WALL_TEXT:
+        if t in d:
+            return f"dialog: {t}"
+    b = (body_text or "").lower()
+    if "log in" in b and "sign up" in b and "password" in b and "following" not in b:
+        return "login wall"
+    return None
+
+
+def check_wall(page) -> str | None:
+    try:
+        dialogs = " ".join(page.locator('[role="dialog"]').all_inner_texts())
+    except Exception:  # noqa: BLE001
+        dialogs = ""
+    try:
+        body = page.locator("body").inner_text(timeout=3000)[:5000]
+    except Exception:  # noqa: BLE001
+        body = ""
+    return wall_reason(page.url, dialogs, body)
+
+
+def human_pause(lo: float = 1.2, hi: float = 3.2) -> None:
+    time.sleep(random.uniform(lo, hi))
+
+
+def human_scroll(page, lo: int = 450, hi: int = 900) -> None:
+    total = random.randint(lo, hi)
+    steps = random.randint(3, 6)
+    for _ in range(steps):
+        page.mouse.wheel(0, total / steps)
+        time.sleep(random.uniform(0.08, 0.25))
+    human_pause()

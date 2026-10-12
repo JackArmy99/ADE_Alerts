@@ -1,0 +1,27 @@
+From: Resident Advisor <noreply@ra.co>
+To: jack+ade@gmail.com
+Subject: Just announced: Josh Baker presents You&Me - ADE
+Date: Mon, 12 Oct 2026 09:15:00 +0200
+Message-ID: <abc123@ra.co>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="BOUNDARY"
+
+--BOUNDARY
+Content-Type: text/plain; charset="utf-8"
+
+Josh Baker presents You&Me
+Sun 25 Oct 2026, Gashouder, Amsterdam
+Lineup: Josh Baker, Marsolo, Alexandria, Marie Montexier
+Presale sign-up: https://ra.co/events/2222222
+Unsubscribe: https://ra.co/unsubscribe?u=1
+
+--BOUNDARY
+Content-Type: text/html; charset="utf-8"
+
+<html><body><h1>Josh Baker presents You&amp;Me</h1>
+<p>Sun 25 Oct 2026, Gashouder, Amsterdam</p>
+<a href="https://ra.co/events/2222222">Presale sign-up</a>
+<a href="https://ra.co/unsubscribe?u=1">Unsubscribe</a>
+<img src="https://ra.co/pixel.gif"></body></html>
+
+--BOUNDARY--

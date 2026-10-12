@@ -1,0 +1,7 @@
+{"total": 2, "results": [
+  {"id": 2001234, "title": "Gashouder presents: Josh Baker", "url": "/en/program/2026/gashouder-presents-josh-baker/2001234/",
+   "location": {"name": "Gashouder"}, "startDate": "2026-10-25T12:00:00+01:00",
+   "lineup": [{"name": "Josh Baker (GB)"}, {"name": "Marsolo (GB)"}], "soldOut": true},
+  {"id": 2001300, "title": "DGTL Opening Day", "url": "/en/program/2026/dgtl-opening-day/2001300/",
+   "location": "NDSM", "startDate": "2026-10-22", "lineup": ["Benwal (GB)", "Paige Tomlinson (GB)"]}
+], "filters": [{"id": 8262, "title": "Festival"}]}

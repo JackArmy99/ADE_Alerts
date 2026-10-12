@@ -1,0 +1,78 @@
+# Accounts the separate Instagram account should follow.
+# handle: null means not looked up yet. Search the name on Instagram and fill it in
+# (or ask Claude Code to propose handles, then CONFIRM each one before following).
+# priority: urgent = any ADE-related post from this account is an urgent alert.
+# tier 1 + 3: follow by hand first (about 30). tier 2: follow-slowly tool later.
+
+accounts:
+  # ---------- Tier 1: confirmed ADE 2026 bookings / key pop-up brands ----------
+  - {name: Social Pleasure, type: brand, tier: 1, priority: urgent, handle: null, note: "Paige Tomlinson's events + label, ADE pop-up announced on IG only"}
+  - {name: Paige Tomlinson, type: dj, tier: 1, priority: urgent, handle: null}
+  - {name: Josh Baker, type: dj, tier: 1, priority: urgent, handle: null, note: "Gashouder Sun 25 Oct, sold out, waitlist"}
+  - {name: You&Me, type: brand, tier: 1, priority: urgent, handle: null, note: "Josh Baker's events and label"}
+  - {name: Prospa, type: dj, tier: 1, priority: urgent, handle: null}
+  - {name: Prophecy, type: brand, tier: 1, priority: urgent, handle: null, note: "Prospa's brand, Awakenings Sun 25 Oct"}
+  - {name: Kyle Starkey, type: dj, tier: 1, priority: urgent, handle: null, note: "Invites x Overbruggen at Pllek, sold out"}
+  - {name: Overbruggen, type: collective, tier: 1, priority: urgent, handle: null}
+  - {name: Pegassi, type: dj, tier: 1, priority: urgent, handle: null, note: "All Day Long sold out"}
+  - {name: CAMELPHAT, type: dj, tier: 1, priority: normal, handle: null, note: "EXPERIENCE x Loveland"}
+  - {name: Marsolo, type: dj, tier: 1, priority: normal, handle: null}
+  - {name: Benwal, type: dj, tier: 1, priority: normal, handle: null}
+  - {name: Locky, type: dj, tier: 1, priority: normal, handle: null}
+  - {name: Bella Claxton, type: dj, tier: 1, priority: normal, handle: null, note: "Paige's b2b partner"}
+  - {name: LAMMER, type: dj, tier: 1, priority: normal, handle: null}
+  - {name: Gaskin, type: dj, tier: 1, priority: normal, handle: null}
+
+  # ---------- Tier 3: promoters and venues matching the taste ----------
+  - {name: Gashouder Presents / Gashouder, type: venue_promoter, tier: 3, priority: normal, handle: null}
+  - {name: Loveland, type: promoter, tier: 3, priority: normal, handle: null}
+  - {name: DGTL, type: promoter, tier: 3, priority: normal, handle: dgtlfestival}
+  - {name: Glitterbox, type: promoter, tier: 3, priority: normal, handle: null}
+  - {name: Defected, type: promoter, tier: 3, priority: normal, handle: null}
+  - {name: Awakenings, type: promoter, tier: 3, priority: normal, handle: null}
+  - {name: Into the Woods, type: promoter, tier: 3, priority: normal, handle: null}
+  - {name: Paradise, type: promoter, tier: 3, priority: normal, handle: null}
+  - {name: Zeezout, type: promoter, tier: 3, priority: normal, handle: null}
+  - {name: elrow, type: promoter, tier: 3, priority: normal, handle: null}
+  - {name: Thuishaven, type: venue, tier: 3, priority: normal, handle: null}
+  - {name: NDSM Warehouse, type: venue, tier: 3, priority: normal, handle: null}
+  - {name: Kromhouthal, type: venue, tier: 3, priority: normal, handle: null}
+  - {name: Pllek, type: venue, tier: 3, priority: normal, handle: null}
+  - {name: Mediahaven, type: venue, tier: 3, priority: normal, handle: null}
+  - {name: A'DAM Toren, type: venue, tier: 3, priority: normal, handle: null}
+
+  # ---------- Tier 2: most played DJs and their brands (follow slowly) ----------
+  - {name: Gorgon City, type: dj, tier: 2, handle: null}
+  - {name: REALM, type: brand, tier: 2, handle: null, note: "Gorgon City"}
+  - {name: Solardo, type: dj, tier: 2, handle: null}
+  - {name: Sola, type: brand, tier: 2, handle: null, note: "Solardo"}
+  - {name: KETTAMA, type: dj, tier: 2, handle: null}
+  - {name: Steel City Dance Discs, type: brand, tier: 2, handle: null, note: "KETTAMA"}
+  - {name: MK, type: dj, tier: 2, handle: null}
+  - {name: Area10, type: brand, tier: 2, handle: null, note: "MK"}
+  - {name: Patrick Topping, type: dj, tier: 2, handle: null}
+  - {name: Trick, type: brand, tier: 2, handle: null, note: "Patrick Topping"}
+  - {name: PAWSA, type: dj, tier: 2, handle: null}
+  - {name: Michael Bibi, type: dj, tier: 2, handle: null}
+  - {name: Solid Grooves, type: brand, tier: 2, handle: null}
+  - {name: Mall Grab, type: dj, tier: 2, handle: null}
+  - {name: Looking For Trouble, type: brand, tier: 2, handle: null, note: "Mall Grab"}
+  - {name: X CLUB., type: dj, tier: 2, handle: null}
+  - {name: SOSA, type: dj, tier: 2, handle: null}
+  - {name: Eli Brown, type: dj, tier: 2, handle: null}
+  - {name: Clouds, type: dj, tier: 2, handle: null}
+  - {name: Joshwa, type: dj, tier: 2, handle: null}
+  - {name: Riordan, type: dj, tier: 2, handle: null}
+  - {name: Chris Lorenzo, type: dj, tier: 2, handle: null}
+  - {name: Ewan McVicar, type: dj, tier: 2, handle: null}
+  - {name: Will Clarke, type: dj, tier: 2, handle: null}
+  - {name: Known Artist, type: dj, tier: 2, handle: null}
+  - {name: CHRIS STASSY, type: dj, tier: 2, handle: null}
+  - {name: Tommy Holohan, type: dj, tier: 2, handle: null}
+  - {name: DJ HEARTSTRING, type: dj, tier: 2, handle: null}
+  - {name: IDEMI, type: dj, tier: 2, handle: null}
+  - {name: Soul Mass Transit System, type: dj, tier: 2, handle: null}
+  - {name: Obskür, type: dj, tier: 2, handle: null}
+  - {name: Interplanetary Criminal, type: dj, tier: 2, handle: null}
+  - {name: Sammy Virji, type: dj, tier: 2, handle: null}
+  - {name: ALISHA, type: dj, tier: 2, handle: null}

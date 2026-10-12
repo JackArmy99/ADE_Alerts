@@ -1,0 +1,171 @@
+# Taste profiles. One block per recipient. Names must match RECIPIENT_NAMES in .env.
+# Jack's list is built from his "Norty Sesh" Spotify playlist (1,006 tracks),
+# weighted toward tracks added in 2025 and 2026.
+# Main genres in the playlist: house, tech house, hard house, UK garage, bassline,
+# techno, drum and bass, disco house, bass house.
+
+people:
+  jack:
+    must_see:          # any ADE booking or presale for these = alert, often urgent
+      - Paige Tomlinson
+      - Josh Baker
+      - Prospa
+      - Kyle Starkey
+      - Pegassi
+      - X CLUB.
+      - KETTAMA
+      - Gorgon City
+      - CAMELPHAT
+      - Solardo
+      - Eli Brown
+      - SOSA
+      - Clouds
+      - Joshwa
+      - Riordan
+      - MK
+    like:              # alert if on an ADE lineup
+      - Chris Lorenzo
+      - Patrick Topping
+      - Mall Grab
+      - Will Clarke
+      - Ewan McVicar
+      - PAWSA
+      - Michael Bibi
+      - Known Artist
+      - Marsolo
+      - Benwal
+      - Locky
+      - Sammy Virji
+      - CHRIS STASSY
+      - Tommy Holohan
+      - DJ HEARTSTRING
+      - IDEMI
+      - Soul Mass Transit System
+      - Obskür
+      - Interplanetary Criminal
+      - Gaskin
+      - Club Angel
+      - Silva Bumpa
+      - Dart
+      - Vivace
+      - Kolter
+      - Sam Alfred
+      - Bou
+      - PAX
+      - Armand Van Helden
+      - Mark Knight
+      - Illyus Barrientos
+      - WEISS
+      - John Summit
+      - Cloonee
+      - Hannah Wants
+      - Chris Lake
+      - FISHER
+      - Luke Dean
+      - Max Dean
+      - Ben Hemsley
+      - Kara Okay
+      - Jacob Matthews
+      - Bella Claxton     # Paige Tomlinson's regular b2b partner
+      - LAMMER            # touring with Paige Tomlinson
+      - ALISHA
+    brands_like:       # event brands / labels; a post from these about ADE matters
+      - Social Pleasure
+      - You&Me
+      - Prophecy
+      - REALM
+      - Steel City Dance Discs
+      - Sola
+      - Area10
+      - Trick
+      - Solid Grooves
+      - Looking For Trouble
+      - EXPERIENCE
+      - Paradise
+      - Glitterbox
+      - Defected
+      - Toolroom
+      - Hot Creations
+      - Into the Woods
+      - Loveland
+      - Gashouder Presents
+      - Overbruggen
+    genres_like: [house, tech house, hard house, uk garage, bassline, techno, bass house, disco house]
+    genres_avoid: []   # fill in if needed, e.g. hardstyle, trance
+    venues_like: [Gashouder, Thuishaven, NDSM Warehouse, Kromhouthal, Pllek, A'DAM Toren, Mediahaven]
+
+  # Fill in the other four. Copy the structure above.
+  friend1:
+    must_see: []
+    like: []
+    brands_like: []
+    genres_like: []
+    genres_avoid: []
+  friend2:
+    must_see: []
+    like: []
+    brands_like: []
+    genres_like: []
+    genres_avoid: []
+  friend3:
+    must_see: []
+    like: []
+    brands_like: []
+    genres_like: []
+    genres_avoid: []
+  friend4:
+    must_see: []
+    like: []
+    brands_like: []
+    genres_like: []
+    genres_avoid: []
+
+aliases:
+  "X CLUB.": ["x club", "xclub"]
+  "CAMELPHAT": ["camelphat", "camel phat"]
+  "Paige Tomlinson": ["paige tomlinson", "paigetomlinson"]
+  "Soul Mass Transit System": ["smts", "soul mass transit system"]
+
+urgent_keywords:     # any of these in an ADE-related post or mail = URGENT
+  - presale
+  - pre-sale
+  - pre-registration
+  - pre-register
+  - register now
+  - sign up
+  - sign-up
+  - signup
+  - waitlist
+  - waiting list
+  - second date
+  - extra date
+  - added date
+  - new date
+  - extra tickets
+  - final release
+  - last tickets
+  - resale
+  - ticketswap
+  - link in bio
+  - secret location
+  - special guest
+  - pop-up
+  - pop up
+  - popup
+  - tickets live
+  - on sale now
+
+ade_keywords:        # helps decide if a post is about ADE week
+  - ADE
+  - Amsterdam Dance Event
+  - "21-25 oct"
+  - "21 oct"
+  - "22 oct"
+  - "23 oct"
+  - "24 oct"
+  - "25 oct"
+  - Amsterdam
+
+constraints:
+  festival_dates: ["2026-10-21", "2026-10-25"]
+  max_alerts_per_person_per_day: 15   # urgent alerts ignore this cap
