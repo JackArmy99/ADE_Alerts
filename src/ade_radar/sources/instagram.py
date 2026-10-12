@@ -345,11 +345,12 @@ def record_suggestions(conn, ctx: Context, items: list[Item]) -> None:
 # ---- manual helpers --------------------------------------------------------
 
 def login(ctx: Context) -> None:
-    with chrome(ctx.settings) as browser:
+    with chrome(ctx.settings, fit_window=True) as browser:
         page = first_page(browser)
         page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
         print("Chrome is open with the radar profile.\n"
               "Log in by hand with the SEPARATE Instagram account (never your personal one),\n"
+              "accept or decline the cookie banner (scroll down inside it for the buttons),\n"
               "dismiss any 'save login info' / notification prompts, then come back here.")
         input("Press Enter here when you are logged in to save the session and close Chrome... ")
 

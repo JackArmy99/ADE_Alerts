@@ -26,7 +26,9 @@ WALL_TEXT = [
 
 
 @contextmanager
-def chrome(s: Settings, headless: bool = False):
+def chrome(s: Settings, headless: bool = False, fit_window: bool = False):
+    """fit_window: page follows the window size (manual login on small/scaled screens); otherwise a fixed
+    1280x900 viewport so screenshots are consistent."""
     from playwright.sync_api import sync_playwright
 
     s.ig_profile_dir.mkdir(parents=True, exist_ok=True)
@@ -34,8 +36,9 @@ def chrome(s: Settings, headless: bool = False):
         try:
             ctx = p.chromium.launch_persistent_context(
                 str(s.ig_profile_dir), channel="chrome", headless=headless,
-                viewport={"width": 1280, "height": 1000}, locale="en-GB", timezone_id="Europe/Amsterdam",
-                args=["--disable-blink-features=AutomationControlled"],
+                viewport=None if fit_window else {"width": 1280, "height": 900}, no_viewport=fit_window,
+                locale="en-GB", timezone_id="Europe/Amsterdam",
+                args=["--disable-blink-features=AutomationControlled"] + (["--start-maximized"] if fit_window else []),
             )
         except Exception as e:  # noqa: BLE001
             raise RuntimeError(f"could not start installed Chrome (is Google Chrome installed?): {e}") from e
