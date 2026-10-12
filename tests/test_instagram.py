@@ -55,7 +55,8 @@ def test_extract_js_on_fixture_page():
     assert first["author"] == "socialpleasure" and first["collaborators"] == ["paigetomlinson"]
     assert first["location"] == "A'DAM Toren"
     assert {"paigetomlinson", "bellaclaxton", "tinybrand.ams"} <= set(first["tagged"])
-    assert "Presale sign-up now" in first["text"] and "1,234 likes" not in first["text"]
+    assert "lammermusic" not in first["tagged"]  # "Liked by lammermusic" is a like, not a tag
+    assert "Presale sign-up now" in first["text"] and "Liked by" not in first["text"]
     assert first["datetime"] == "2026-10-12T10:00:00.000Z"
     assert second["permalink"] == "https://www.instagram.com/reel/C9Reel_99/" and second["author"] == "kettama"
     assert tray == 1

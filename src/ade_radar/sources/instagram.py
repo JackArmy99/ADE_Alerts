@@ -41,8 +41,17 @@ UI_LINES = re.compile(
 
 EXTRACT_JS = """
 (el) => {
+  // "Liked by <someone> and 2,278 others" links are likers, not tags: flag them so they are ignored.
+  const social = (a) => {
+    let n = a.parentElement;
+    for (let i = 0; i < 4 && n && n !== el; i++, n = n.parentElement) {
+      const t = (n.innerText || '').trim();
+      if (t.length < 300 && /^(liked by|followed by|vind ik leuk|gefällt)/i.test(t)) return true;
+    }
+    return false;
+  };
   const anchors = Array.from(el.querySelectorAll('a[href]')).map(a => ({
-      href: a.getAttribute('href'), text: (a.innerText || '').trim()}));
+      href: a.getAttribute('href'), text: (a.innerText || '').trim(), social: social(a)}));
   const header = el.querySelector('header');
   const headerAnchors = header ? Array.from(header.querySelectorAll('a[href]')).map(a => ({
       href: a.getAttribute('href'), text: (a.innerText || '').trim()})) : [];
@@ -97,6 +106,8 @@ def parse_post(raw: dict) -> dict | None:
             location = a["text"]
     body_handles = []
     for a in raw.get("anchors", []):
+        if a.get("social"):
+            continue  # someone who liked the post, not a tag
         h = profile_handle(a["href"])
         if h and h not in header_handles and h not in body_handles:
             body_handles.append(h)
