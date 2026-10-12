@@ -11,16 +11,16 @@ SAMPLE = ["Social Pleasure ADE pop-up (Paige Tomlinson)", "Thu 22 Oct 23:00", "A
           "TEST: presale sign-up open: https://www.instagram.com/socialpleasure/"]
 
 
-def check_template(ctx: Context) -> dict | None:
+def check_template(ctx: Context, name: str | None = None) -> dict | None:
     s = ctx.settings
     wa = WhatsApp(s)
     try:
-        found = wa.get_template(s.wa_template if s.wa_template != "hello_world" else "ade_alert")
+        found = wa.get_template(name or (s.wa_template if s.wa_template != "hello_world" else "ade_alert"))
     except WhatsAppError as e:
         print(f"Meta API error: {e}")
         return None
     if not found:
-        print("Template ade_alert not found on this WhatsApp Business Account.")
+        print(f"Template {name or 'ade_alert'} not found on this WhatsApp Business Account.")
         return None
     for t in found:
         print(f"name={t.get('name')}  status={t.get('status')}  language={t.get('language')}  "

@@ -34,7 +34,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--force", action="store_true", help="ignore the Instagram once-per-hour guard")
     t = sub.add_parser("test-whatsapp", help="send hello_world (and ade_alert if approved)")
     t.add_argument("--to", help="only this recipient name, e.g. jack")
-    sub.add_parser("check-template", help="print ade_alert status, language and components from Meta")
+    ct = sub.add_parser("check-template", help="print a template's status, language and components from Meta")
+    ct.add_argument("--name", help="template name (default: WHATSAPP_TEMPLATE, or ade_alert)")
     for name in ("heartbeat", "digest"):
         p = sub.add_parser(name)
         p.add_argument("--dry-run", action="store_true")
@@ -80,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "check-template":
         from .tools.check_template import check_template
-        return 0 if check_template(ctx) else 1
+        return 0 if check_template(ctx, args.name) else 1
     if args.cmd == "heartbeat":
         from .reports import heartbeat
         print(heartbeat(ctx, args.dry_run))
