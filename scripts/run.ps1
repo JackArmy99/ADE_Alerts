@@ -5,14 +5,14 @@ param([Parameter(ValueFromRemainingArguments = $true)][string[]]$RadarArgs)
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 $env:PYTHONUTF8 = "1"
-$Exe = Join-Path $Root ".venv\Scripts\ade-radar.exe"
+$Exe = Join-Path $Root ".venv\Scripts\python.exe"
 $LogDir = Join-Path $Root "data\logs"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $Log = Join-Path $LogDir ("task_" + (Get-Date -Format "yyyy-MM-dd") + ".log")
 
 function Invoke-Radar([string[]]$a) {
     "==== $(Get-Date -Format s) ade-radar $($a -join ' ')" | Out-File -Append -Encoding utf8 $Log
-    & $Exe @a *>&1 | Out-File -Append -Encoding utf8 $Log
+    & $Exe -m ade_radar @a *>&1 | Out-File -Append -Encoding utf8 $Log
     return $LASTEXITCODE
 }
 

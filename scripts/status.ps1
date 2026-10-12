@@ -16,4 +16,4 @@ Write-Host "--- data\logs\radar.log (last 25 lines) ---"
 if (Test-Path data\logs\radar.log) { Get-Content data\logs\radar.log -Tail 25 }
 Write-Host "--- ade-radar status ---"
 $env:PYTHONUTF8 = "1"
-.venv\Scripts\ade-radar.exe status
+.venv\Scripts\python.exe -m ade_radar status

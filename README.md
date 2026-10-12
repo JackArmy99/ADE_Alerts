@@ -27,27 +27,27 @@ against synthetic fixtures and have to be checked once against the real sites (s
 git clone <this repo> C:\ade-radar ; cd C:\ade-radar
 powershell -ExecutionPolicy Bypass -File scripts\setup.ps1     # venv, deps, .env, database
 notepad .env                                                   # paste the secrets
-$r = ".venv\Scripts\ade-radar.exe"
+function radar { & .venv\Scripts\python.exe -m ade_radar @args }   # Windows may block the ade-radar.exe launcher
 
 # 2. WhatsApp
-& $r check-template              # status + language of ade_alert; fixes WHATSAPP_TEMPLATE_LANG if needed
-& $r test-whatsapp --to jack     # hello_world (+ ade_alert sample if approved) to Jack only
-& $r test-whatsapp               # then everyone
+radar check-template              # status + language of ade_alert; fixes WHATSAPP_TEMPLATE_LANG if needed
+radar test-whatsapp --to jack     # hello_world (+ ade_alert sample if approved) to Jack only
+radar test-whatsapp               # then everyone
 
 # 3. Instagram (separate account only)
-& $r ig-login                    # log in by hand in the Chrome window, then press Enter
-& $r ig-inspect                  # saves the real feed to tests\fixtures\instagram\live_*; check parsed.json
-& $r run --source instagram --dry-run --force
+radar ig-login                    # log in by hand in the Chrome window, then press Enter
+radar ig-inspect                  # saves the real feed to tests\fixtures\instagram\live_*; check parsed.json
+radar run --source instagram --dry-run --force
 
 # 4. Fake-flyer test: post "ADE pop-up, presale sign-up, link in bio" from your own account, then
-& $r run --source instagram --force   # must arrive as an URGENT WhatsApp
+radar run --source instagram --force   # must arrive as an URGENT WhatsApp
 
 # 5. Gmail: forward an old event mail to the +ade address, then
-& $r run --source gmail --dry-run
+radar run --source gmail --dry-run
 
 # 7. ADE programme
-& $r ade-discover                # finds the JSON endpoint, saves fixtures, writes data\ade_endpoint.json
-& $r run --source ade --dry-run
+radar ade-discover                # finds the JSON endpoint, saves fixtures, writes data\ade_endpoint.json
+radar run --source ade --dry-run
 
 # 6. Schedule everything
 powershell -ExecutionPolicy Bypass -File scripts\install_tasks.ps1

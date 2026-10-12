@@ -25,5 +25,5 @@ if (-not (Test-Path .env)) {
     Write-Host "Created .env from .env.example - fill in the secrets now (notepad .env)." -ForegroundColor Yellow
 }
 # The radar drives your installed Google Chrome (channel=chrome); no Playwright browser download needed.
-.venv\Scripts\ade-radar.exe init
-Write-Host "Done. Next: .venv\Scripts\ade-radar.exe check-template" -ForegroundColor Green
+.venv\Scripts\python.exe -m ade_radar init
+Write-Host "Done. Next: .venv\Scripts\python.exe -m ade_radar ig-login" -ForegroundColor Green
