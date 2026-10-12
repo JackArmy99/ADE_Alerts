@@ -4,6 +4,13 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
+if (-not (Get-Command uv -ErrorAction SilentlyContinue) -and -not (Get-Command py -ErrorAction SilentlyContinue)) {
+    Write-Host "Neither uv nor Python was found. Install uv (it downloads Python 3.12 for you):" -ForegroundColor Yellow
+    Write-Host '  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"'
+    Write-Host "Then close this window, open a new PowerShell, cd C:\ade-radar and run this script again."
+    exit 1
+}
+
 if (Get-Command uv -ErrorAction SilentlyContinue) {
     uv venv .venv --python 3.12
     uv pip install --python .venv\Scripts\python.exe -e ".[dev]"
