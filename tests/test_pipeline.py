@@ -87,3 +87,15 @@ def test_instagram_items_marked_seen_only_after_processing(conn, ctx, fake_wa):
     run(conn, ctx, [flyer("6")], fake_wa, [json.dumps(GOOD)], dry=True)
     conn.rollback()
     assert not db.ig_is_seen(conn, "https://www.instagram.com/p/6/")
+
+
+def test_every_alert_has_a_link():
+    from ade_radar.alerts import best_link
+    cls = Classification()
+    assert best_link(Item("instagram", "p", url="https://www.instagram.com/p/X/", author="a"), cls) == \
+        "https://www.instagram.com/p/X/"
+    story = Item("instagram_story", "s", url="https://www.instagram.com/stories/kettama/123/", author="kettama")
+    assert best_link(story, cls) == "https://www.instagram.com/kettama/"
+    tickets = Classification(links=["https://dice.fm/event/x"])
+    assert best_link(story, tickets) == "https://dice.fm/event/x"
+    assert best_link(Item("gmail", "1", author="RA <x@ra.co>"), cls).startswith("https://")

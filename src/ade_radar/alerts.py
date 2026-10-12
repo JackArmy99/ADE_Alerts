@@ -42,12 +42,17 @@ def best_link(item: Item, cls: Classification) -> str:
     for u in links:
         if any(h in u.lower() for h in TICKET_HOSTS):
             return u
-    if item.source.startswith("instagram") and re.search(r"link\s*in\s*(?:our\s*)?bio", item.text or "", re.I):
-        if item.author:
-            return f"https://www.instagram.com/{item.author}/"
+    profile = f"https://www.instagram.com/{item.author}/" if item.source.startswith("instagram") and item.author \
+        else ""
+    if profile and re.search(r"link\s*in\s*(?:our\s*)?bio", item.text or "", re.I):
+        return profile
+    if item.source == "instagram_story" and profile:
+        return profile  # story links expire after 24h; the account page does not
     if item.url:
         return item.url
-    return links[0] if links else ""
+    if links:
+        return links[0]
+    return profile or "https://www.amsterdam-dance-event.nl/en/program/"
 
 
 def template_params(item: Item, cls: Classification, d: Decision, detail: str | None = None) -> list[str]:
