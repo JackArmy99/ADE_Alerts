@@ -7,3 +7,14 @@ __pycache__/
 .pytest_cache/
 build/
 dist/
+
+# secrets in any env-file variant (the template stays tracked)
+.env.*
+!.env.example
+# local databases and logs outside data/
+*.sqlite
+*.sqlite-*
+*.log
+# live captures from ig-inspect / ade-discover: logged-in pages, private to this laptop
+tests/fixtures/instagram/live_*/
+tests/fixtures/ade/discover_*/
