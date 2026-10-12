@@ -131,6 +131,7 @@ def dispatch(conn, ctx: Context, wa: WhatsApp | None, item: Item, cls: Classific
         phone = s.recipients.get(person)
         if dry_run:
             print(f"\n--- [dry-run] WhatsApp to {person} ({d.urgency}) ---\n{render(params)}\n")
+            log.info("[dry-run] WhatsApp to %s (%s): %s", person, d.urgency, " | ".join(params))
             _record(conn, item.id, rh, person, d.urgency, "dry_run")
             stats.dry_run += 1
             continue
