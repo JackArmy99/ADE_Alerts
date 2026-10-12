@@ -120,6 +120,8 @@ def test_collect_feed_on_fixture_skips_old_posts(conn, tmp_path, monkeypatch):
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     html = html.replace("2026-10-12T10:00:00.000Z", now).replace("2026-10-11T20:00:00.000Z", "2020-01-01T00:00:00.000Z")
+    html = html.replace("@tinybrand.ams</div>", "@tinybrand.ams <span onclick=\"this.parentNode.append(' Tickets: '"
+                        " + 'dice.fm/ade'); this.remove()\">more</span></div>")
     counts = {}
     with sync_playwright() as p:
         b = p.chromium.launch(executable_path=str(CHROMIUM), headless=True)
@@ -129,4 +131,5 @@ def test_collect_feed_on_fixture_skips_old_posts(conn, tmp_path, monkeypatch):
         b.close()
     assert [i.external_id for i in items] == ["https://www.instagram.com/p/DAbc123xyz/"]
     assert items[0].author == "socialpleasure" and items[0].screenshot_paths
+    assert "Tickets: dice.fm/ade" in items[0].text  # caption "more" expanded, same post kept
     assert counts["posts_checked"] == 2 and counts["posts_too_old"] == 1

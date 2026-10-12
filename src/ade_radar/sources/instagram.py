@@ -236,7 +236,9 @@ def collect_feed(page, conn, shots: Path, limit: int, counts: dict, max_age_hour
     ref = datetime.now().astimezone()
     while len(items) < limit and idle_scrolls < 6 and scrolls < MAX_SCROLLS:
         progressed = False
-        for art in page.locator("article").all():
+        # Element handles stay bound to one post; nth-based locators shift when Instagram recycles the
+        # feed's DOM while scrolling, which could pair a screenshot with the wrong post.
+        for art in page.query_selector_all("article"):
             try:
                 raw = art.evaluate(EXTRACT_JS)
             except Exception:  # noqa: BLE001
@@ -265,7 +267,7 @@ def collect_feed(page, conn, shots: Path, limit: int, counts: dict, max_age_hour
                     return _done(items, counts, checked, chronological)
                 continue
             old_streak = 0
-            items.append(_capture_post(art, post, shots))
+            items.append(_capture_post(page, art, post, shots))
             if len(items) >= limit:
                 break
         if _caught_up(page):
@@ -293,13 +295,27 @@ def _caught_up(page) -> bool:
         return False
 
 
-def _capture_post(art, post: dict, shots: Path) -> Item:
+EXPAND_CAPTION_JS = """
+(el) => {
+  const more = Array.from(el.querySelectorAll('span, div[role="button"], button')).find(x =>
+      x.children.length === 0 && /^(… ?)?more$/.test((x.innerText || '').trim()));
+  if (!more) return false;
+  more.click();
+  return true;
+}
+"""
+
+
+def _capture_post(page, art, post: dict, shots: Path) -> Item:
     try:
-        more = art.get_by_text(re.compile(r"^(more|… more)$"))
-        if more.count():
-            more.first.click(timeout=1500)
+        if art.evaluate(EXPAND_CAPTION_JS):
             time.sleep(0.6)
-            post = parse_post(art.evaluate(EXTRACT_JS)) or post
+            if page.locator('[role="dialog"] article').count():
+                page.keyboard.press("Escape")  # the click opened the post instead of expanding it
+                time.sleep(0.5)
+            fuller = parse_post(art.evaluate(EXTRACT_JS))
+            if fuller and fuller["permalink"] == post["permalink"]:
+                post = fuller
     except Exception:  # noqa: BLE001
         pass
     path = shots / (post["permalink"].rstrip("/").split("/")[-1] + ".jpg")
@@ -416,7 +432,7 @@ def inspect(ctx: Context) -> Path:
         import json
 
         raws = []
-        for art in page.locator("article").all()[:5]:
+        for art in page.query_selector_all("article")[:5]:
             raws.append(art.evaluate(EXTRACT_JS))
         (out / "articles.json").write_text(json.dumps(raws, indent=2, ensure_ascii=False), encoding="utf-8")
         parsed = [parse_post(r) for r in raws]
