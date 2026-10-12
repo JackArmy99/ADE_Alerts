@@ -90,3 +90,18 @@ def test_cookie_banner_dismissed_even_below_the_fold():
         page.set_content("<p>no banner</p>")
         assert not dismiss_cookie_banner(page)
         b.close()
+
+
+def test_post_age_and_chronology():
+    from datetime import datetime, timezone
+    from ade_radar.sources.instagram import is_chronological, post_age_hours
+
+    ref = datetime(2026, 10, 12, 12, 0, tzinfo=timezone.utc)
+    assert post_age_hours("2026-10-12T10:00:00.000Z", ref) == 2
+    assert post_age_hours("2026-09-01T10:00:00.000Z", ref) > 48
+    assert post_age_hours(None, ref) is None and post_age_hours("garbage", ref) is None
+    newest_first = ["2026-10-12T10:00:00Z", "2026-10-12T08:00:00Z", "2026-10-11T20:00:00Z", "2026-10-10T09:00:00Z"]
+    assert is_chronological(newest_first)
+    mixed = ["2026-10-12T10:00:00Z", "2026-09-01T08:00:00Z", "2026-10-11T20:00:00Z", "2026-08-10T09:00:00Z",
+             "2026-10-12T09:00:00Z"]
+    assert not is_chronological(mixed)

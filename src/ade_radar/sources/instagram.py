@@ -22,9 +22,12 @@ log = logging.getLogger(__name__)
 FEED_URL = "https://www.instagram.com/?variant=following"
 MAX_POSTS = 40
 FIRST_RUN_MAX_POSTS = 20
+FIRST_RUN_MAX_AGE_HOURS = 72
 MAX_STORY_FRAMES = 40
 MIN_MINUTES_BETWEEN_RUNS = 50
 STOP_AFTER_SEEN = 3
+STOP_AFTER_OLD = 3  # consecutive posts older than the age limit (chronological feed only)
+MAX_SCROLLS = 30
 RESERVED = {"explore", "accounts", "direct", "reels", "reel", "stories", "p", "tv", "about", "legal", "privacy",
             "terms", "developer", "web", "challenge", "emails", "session", "help", "api", "graphql", "locations",
             "tags", "audio", "your_activity", "notifications", "create"}
@@ -112,6 +115,27 @@ def parse_post(raw: dict) -> dict | None:
             "location": location, "text": text, "datetime": raw.get("datetime")}
 
 
+def post_age_hours(dt: str | None, ref: datetime) -> float | None:
+    """Age of a post from its <time datetime="..."> (UTC ISO string); None when unknown."""
+    if not dt:
+        return None
+    try:
+        t = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (ref - t).total_seconds() / 3600
+
+
+def is_chronological(datetimes: list[str]) -> bool:
+    """True when the feed runs newest-first (the Following feed); For you mixes old and new."""
+    ts = [d for d in datetimes if d][:8]
+    if len(ts) < 3:
+        return True
+    parsed = [datetime.fromisoformat(d.replace("Z", "+00:00")) for d in ts]
+    out_of_order = sum(1 for a, b in zip(parsed, parsed[1:]) if b > a)
+    return out_of_order <= 1  # allow one blip (e.g. a collab post)
+
+
 def parse_story_url(url: str) -> tuple[str, str] | None:
     m = STORY.search(url or "")
     return (m.group(1).lower(), f"https://www.instagram.com/stories/{m.group(1)}/{m.group(2)}/") if m else None
@@ -158,8 +182,9 @@ def collect(ctx: Context, conn, counts: dict, force: bool = False, dry_run: bool
         human_pause(4, 7)
         dismiss_cookie_banner(page)
         _raise_if_wall(page)
-        _ensure_following_feed(page)
-        items += collect_feed(page, conn, shots, limit, counts)
+        counts["following_feed"] = _ensure_following_feed(page)
+        max_age = FIRST_RUN_MAX_AGE_HOURS if first_run else ctx.settings.ig_max_age_hours
+        items += collect_feed(page, conn, shots, limit, counts, max_age)
         _raise_if_wall(page)
         try:
             page.mouse.wheel(0, -100_000)
@@ -181,25 +206,84 @@ def _raise_if_wall(page) -> None:
         raise SourceBlocked(f"Instagram {reason}. Open `ade-radar ig-login` and clear it by hand")
 
 
-def _ensure_following_feed(page) -> None:
-    """?variant=following should show the chronological Following feed; if not, try the feed switcher."""
+def _ensure_following_feed(page) -> bool:
+    """Make sure the chronological Following feed is shown (not For you). Returns True when confirmed."""
+    if "variant=following" in page.url:
+        return True
+    log.info("instagram: not on the Following feed (%s), switching via the Instagram logo menu", page.url)
     try:
-        body = page.locator("main").inner_text(timeout=5000)[:3000].lower()
+        page.get_by_role("link", name=re.compile(r"^Instagram$")).first.click(timeout=3000)
+        human_pause()
+        page.get_by_text(re.compile(r"^Following$")).first.click(timeout=3000)
+        human_pause(3, 5)
     except Exception:  # noqa: BLE001
-        body = ""
-    if "following" in body:
-        return
-    for name in ("For you", "Following"):
-        try:
-            page.get_by_text(name, exact=True).first.click(timeout=2000)
-            human_pause()
-        except Exception:  # noqa: BLE001
-            pass
-    try:
-        page.get_by_role("menuitem", name=re.compile("Following")).first.click(timeout=2000)
-        human_pause(2, 4)
-    except Exception:  # noqa: BLE001
-        log.warning("could not confirm the Following feed; continuing with what is shown")
+        pass
+    if "variant=following" in page.url:
+        return True
+    log.warning("could not confirm the Following feed; relying on post dates instead")
+    return False
+
+
+def collect_feed(page, conn, shots: Path, limit: int, counts: dict, max_age_hours: float) -> list[Item]:
+    """Newest-first walk of the feed. Stops at already-seen posts or, on a chronological feed, at posts older
+    than max_age_hours. Old posts are never captured, whichever feed Instagram shows."""
+    items: list[Item] = []
+    done: set[str] = set()
+    datetimes: list[str] = []
+    seen_streak = old_streak = 0
+    idle_scrolls = scrolls = 0
+    checked = 0
+    ref = datetime.now().astimezone()
+    while len(items) < limit and idle_scrolls < 6 and scrolls < MAX_SCROLLS:
+        progressed = False
+        for art in page.locator("article").all():
+            try:
+                raw = art.evaluate(EXTRACT_JS)
+            except Exception:  # noqa: BLE001
+                continue
+            post = parse_post(raw)
+            if not post or post["permalink"] in done:
+                continue
+            done.add(post["permalink"])
+            datetimes.append(post["datetime"] or "")
+            progressed = True
+            checked += 1
+            chronological = is_chronological(datetimes)
+            if db.ig_is_seen(conn, post["permalink"]):
+                seen_streak += 1
+                if seen_streak >= STOP_AFTER_SEEN and chronological:
+                    log.info("instagram: reached last seen posts")
+                    return _done(items, counts, checked, chronological)
+                continue
+            seen_streak = 0
+            age = post_age_hours(post["datetime"], ref)
+            if age is not None and age > max_age_hours:
+                counts["posts_too_old"] = counts.get("posts_too_old", 0) + 1
+                old_streak += 1
+                if old_streak >= STOP_AFTER_OLD and chronological:
+                    log.info("instagram: reached posts older than %.0fh", max_age_hours)
+                    return _done(items, counts, checked, chronological)
+                continue
+            old_streak = 0
+            items.append(_capture_post(art, post, shots))
+            if len(items) >= limit:
+                break
+        if _caught_up(page):
+            break
+        human_scroll(page)
+        scrolls += 1
+        idle_scrolls = 0 if progressed else idle_scrolls + 1
+        if (reason := check_wall(page)):
+            raise SourceBlocked(f"Instagram {reason}")
+    return _done(items, counts, checked, is_chronological(datetimes))
+
+
+def _done(items: list[Item], counts: dict, checked: int, chronological: bool) -> list[Item]:
+    counts["posts_checked"] = checked
+    counts["feed_chronological"] = chronological
+    if not chronological:
+        log.warning("instagram: feed is not newest-first (For you?); only posts newer than the age limit were kept")
+    return items
 
 
 def collect_feed(page, conn, shots: Path, limit: int, counts: dict) -> list[Item]:
@@ -379,6 +463,8 @@ def inspect(ctx: Context) -> Path:
         (out / "parsed.json").write_text(json.dumps(parsed, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"tray story buttons: {page.get_by_role('button', name=re.compile('^Story by', re.I)).count()}")
         print(f"wall check: {check_wall(page)}")
+        print(f"url: {page.url}  (Following feed: {'yes' if 'variant=following' in page.url else 'NO'})")
+        print(f"newest-first: {is_chronological([p['datetime'] for p in parsed if p])}")
         for p in parsed:
-            print(p and {k: p[k] for k in ('permalink', 'author', 'tagged')})
+            print(p and {k: p[k] for k in ('datetime', 'permalink', 'author', 'tagged')})
     return out

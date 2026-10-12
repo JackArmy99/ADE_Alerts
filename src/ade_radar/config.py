@@ -48,6 +48,7 @@ class Settings:
     gmail_label: str = "ADE"
     ntfy_topic: str = ""
     ig_profile_dir: Path = Path("data/ig_profile")
+    ig_max_age_hours: float = 48  # posts older than this are never alerted on
 
     @property
     def data_dir(self) -> Path:
@@ -104,6 +105,7 @@ def load_settings(root: Path | None = None) -> Settings:
         gmail_label=e("GMAIL_LABEL") or "ADE",
         ntfy_topic=e("NTFY_TOPIC", ""),
         ig_profile_dir=ig_dir if ig_dir.is_absolute() else root / ig_dir,
+        ig_max_age_hours=float(e("IG_MAX_AGE_HOURS") or 48),
     )
 
 
