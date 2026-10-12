@@ -286,46 +286,6 @@ def _done(items: list[Item], counts: dict, checked: int, chronological: bool) ->
     return items
 
 
-def collect_feed(page, conn, shots: Path, limit: int, counts: dict) -> list[Item]:
-    items: list[Item] = []
-    done: set[str] = set()
-    seen_streak = 0
-    idle_scrolls = 0
-    checked = 0
-    while len(items) < limit and idle_scrolls < 6:
-        progressed = False
-        for art in page.locator("article").all():
-            try:
-                raw = art.evaluate(EXTRACT_JS)
-            except Exception:  # noqa: BLE001
-                continue
-            post = parse_post(raw)
-            if not post or post["permalink"] in done:
-                continue
-            done.add(post["permalink"])
-            progressed = True
-            checked += 1
-            if db.ig_is_seen(conn, post["permalink"]):
-                seen_streak += 1
-                if seen_streak >= STOP_AFTER_SEEN:
-                    counts["posts_checked"] = checked
-                    log.info("instagram: reached last seen posts")
-                    return items
-                continue
-            seen_streak = 0
-            items.append(_capture_post(art, post, shots))
-            if len(items) >= limit:
-                break
-        if _caught_up(page):
-            break
-        human_scroll(page)
-        idle_scrolls = 0 if progressed else idle_scrolls + 1
-        if (reason := check_wall(page)):
-            raise SourceBlocked(f"Instagram {reason}")
-    counts["posts_checked"] = checked
-    return items
-
-
 def _caught_up(page) -> bool:
     try:
         return page.get_by_text(re.compile(r"You'?re all caught up", re.I)).count() > 0

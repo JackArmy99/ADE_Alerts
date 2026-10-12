@@ -105,3 +105,28 @@ def test_post_age_and_chronology():
     mixed = ["2026-10-12T10:00:00Z", "2026-09-01T08:00:00Z", "2026-10-11T20:00:00Z", "2026-08-10T09:00:00Z",
              "2026-10-12T09:00:00Z"]
     assert not is_chronological(mixed)
+
+
+@pytest.mark.skipif(not CHROMIUM.exists(), reason="no local chromium")
+def test_collect_feed_on_fixture_skips_old_posts(conn, tmp_path, monkeypatch):
+    """Runs the real feed walk against the fixture page: new post captured, old one skipped."""
+    from playwright.sync_api import sync_playwright
+    from ade_radar.sources import instagram
+
+    monkeypatch.setattr(instagram, "human_scroll", lambda page: None)
+    monkeypatch.setattr(instagram, "human_pause", lambda *a: None)
+    monkeypatch.setattr(instagram.time, "sleep", lambda s: None)
+    html = (FIXTURES / "instagram" / "feed_synthetic.html").read_text(encoding="utf-8")
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    html = html.replace("2026-10-12T10:00:00.000Z", now).replace("2026-10-11T20:00:00.000Z", "2020-01-01T00:00:00.000Z")
+    counts = {}
+    with sync_playwright() as p:
+        b = p.chromium.launch(executable_path=str(CHROMIUM), headless=True)
+        page = b.new_page()
+        page.set_content(html)
+        items = instagram.collect_feed(page, conn, tmp_path, 40, counts, 48)
+        b.close()
+    assert [i.external_id for i in items] == ["https://www.instagram.com/p/DAbc123xyz/"]
+    assert items[0].author == "socialpleasure" and items[0].screenshot_paths
+    assert counts["posts_checked"] == 2 and counts["posts_too_old"] == 1
