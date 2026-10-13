@@ -24,3 +24,10 @@ def test_security_mails_never_reach_claude():
     assert is_security_mail(Item("gmail", "3", author="DICE <hello@dice.fm>", raw={"subject": "Reset your password"}))
     assert not is_security_mail(Item("gmail", "4", author="Resident Advisor <noreply@ra.co>",
                                      raw={"subject": "Just announced: Josh Baker presents You&Me - ADE"}))
+
+
+def test_presale_password_mail_is_not_treated_as_security():
+    from ade_radar.models import Item
+    from ade_radar.sources.gmail import is_security_mail
+    assert not is_security_mail(Item("gmail", "5", author="Loveland <info@loveland.nl>",
+                                     raw={"subject": "Your ADE presale password is here"}))

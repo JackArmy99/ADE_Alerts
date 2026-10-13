@@ -29,8 +29,10 @@ MIN_IMAGE_BYTES = 8_000  # skip tracking pixels and tiny logos
 SECURITY_SENDERS = re.compile(
     r"@(?:accounts\.google\.com|google\.com|mail\.instagram\.com|instagram\.com|facebookmail\.com|"
     r"meta\.com|support\.facebook\.com)>?$", re.I)
-SECURITY_SUBJECT = re.compile(r"security alert|verification code|confirm your|sign[- ]in|log[- ]?in code|"
-                              r"password|2-step|two-factor|passkey|new device", re.I)
+# Narrow on purpose: "presale password" / "your presale code" mails must still get through.
+SECURITY_SUBJECT = re.compile(r"security alert|verification code|confirm your (?:email|account)|new sign[- ]in|"
+                              r"log[- ]?in code|(?:reset|change[sd]?) your password|password (?:reset|changed)|"
+                              r"2-step|two-factor|passkey|new device", re.I)
 
 
 def is_security_mail(item: Item) -> bool:
