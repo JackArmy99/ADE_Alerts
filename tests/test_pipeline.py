@@ -118,3 +118,13 @@ def test_failed_whatsapp_goes_to_ntfy_once_and_is_retried(conn, ctx, monkeypatch
     retry_failed(conn, ctx, wa, s3)
     assert s3.sent == 1 and len(wa.sent) == 2
     assert retry_failed(conn, ctx, wa, AlertStats()) is None and len(wa.sent) == 2  # nothing left
+
+
+def test_cli_source_list():
+    import argparse
+    import pytest
+    from ade_radar.cli import _sources
+    assert _sources("instagram,gmail") == ["instagram", "gmail"]
+    assert _sources("all") == ["instagram", "gmail", "ade"]
+    with pytest.raises(argparse.ArgumentTypeError):
+        _sources("instagram,nope")

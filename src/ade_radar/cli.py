@@ -29,7 +29,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("ig-login", help="open Chrome with the radar profile to log in by hand")
     sub.add_parser("ig-inspect", help="save the live Following feed as fixtures (development)")
     r = sub.add_parser("run", help="run one or all sources")
-    r.add_argument("--source", choices=[*SOURCES, "all"], default="all")
+    r.add_argument("--source", default="all", type=_sources,
+                   help="instagram, gmail, ade, all, or a comma list such as instagram,gmail")
     r.add_argument("--dry-run", action="store_true", help="print WhatsApp messages instead of sending")
     r.add_argument("--force", action="store_true", help="ignore the Instagram once-per-hour guard")
     t = sub.add_parser("test-whatsapp", help="send hello_world (and ade_alert if approved)")
@@ -70,11 +71,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "run":
         from .pipeline import run_source
-        ok = True
-        for src in (SOURCES if args.source == "all" else (args.source,)):
+        ok, summary = True, []
+        for src in args.source:
             res = run_source(ctx, src, dry_run=args.dry_run, force=args.force)
             print(f"{src}: {json.dumps(res, sort_keys=True)}")
             ok &= res["ok"]
+            summary.append(_summary_line(src, res))
+        if len(args.source) > 1:
+            print("\n=== summary ===\n" + "\n".join(summary))
         return 0 if ok else 1
     if args.cmd == "test-whatsapp":
         from .tools.check_template import test_whatsapp
@@ -117,6 +121,26 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "status":
         return status(ctx)
     return 1
+
+
+def _sources(value: str) -> list[str]:
+    names = SOURCES if value == "all" else [v.strip() for v in value.split(",") if v.strip()]
+    bad = [n for n in names if n not in SOURCES]
+    if bad or not names:
+        raise argparse.ArgumentTypeError(f"unknown source {', '.join(bad) or value!r}; use {', '.join(SOURCES)} or all")
+    return list(dict.fromkeys(names))
+
+
+def _summary_line(src: str, r: dict) -> str:
+    if not r.get("ok"):
+        return f"{src:9} FAILED: {r.get('error', '')[:120]}"
+    found = {"instagram": f"{r.get('posts_new', 0)} posts, {r.get('stories_new', 0)} stories",
+             "gmail": f"{r.get('mails_new', 0)} mails ({r.get('mails_security_skipped', 0)} security skipped)",
+             "ade": f"{r.get('events_listed', 0)} events listed"}.get(src, "")
+    alerts = r.get("alerts_sent", 0) + r.get("alerts_dry_run", 0)
+    return (f"{src:9} ok: {found}; {r.get('new_items', 0)} new, {alerts} alerts"
+            f"{' (dry run)' if r.get('alerts_dry_run') else ''}, {r.get('teasers', 0)} teasers, "
+            f"{r.get('claude_calls', 0)} Claude calls")
 
 
 def status(ctx) -> int:
