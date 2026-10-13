@@ -14,7 +14,11 @@ FIXTURES = Path(__file__).parent / "fixtures"
 def ctx(tmp_path):
     s = Settings(root=tmp_path, recipients={"jack": "31600000001", "friend1": "31600000002"},
                  wa_token="test-token-123456", wa_phone_number_id="111", wa_waba_id="222", ntfy_topic="")
-    return Context(settings=s, taste=load_taste(REPO), accounts=load_accounts(REPO))
+    taste = load_taste(REPO)
+    # Routing tests need one person with Jack's taste and one with none, whatever config/taste.yaml says now.
+    empty = {k: [] for k in ("must_see", "like", "brands_like", "genres_like", "genres_avoid", "venues_like")}
+    taste.people = {"jack": taste.people["jack"], "friend1": empty}
+    return Context(settings=s, taste=taste, accounts=load_accounts(REPO))
 
 
 @pytest.fixture

@@ -1,11 +1,11 @@
-# Taste profiles. One block per recipient. Names must match RECIPIENT_NAMES in .env.
+# Taste profiles. One block per recipient. Names must match RECIPIENT_NAMES in .env (case does not matter).
 # Jack's list is built from his "Norty Sesh" Spotify playlist (1,006 tracks),
 # weighted toward tracks added in 2025 and 2026.
 # Main genres in the playlist: house, tech house, hard house, UK garage, bassline,
 # techno, drum and bass, disco house, bass house.
 
 people:
-  jack:
+  jack: &jack
     must_see:          # any ADE booking or presale for these = alert, often urgent
       - Paige Tomlinson
       - Josh Baker
@@ -95,12 +95,9 @@ people:
     venues_like: [Gashouder, Thuishaven, NDSM Warehouse, Kromhouthal, Pllek, A'DAM Toren, Mediahaven]
 
   # Fill in the other four. Copy the structure above.
-  friend1:
-    must_see: []
-    like: []
-    brands_like: []
-    genres_like: []
-    genres_avoid: []
+  # Mc shares Jack's taste for now (YAML alias). To give Mc their own list later, replace "*jack"
+  # with a block like Jack's above.
+  mc: *jack
   friend2:
     must_see: []
     like: []
