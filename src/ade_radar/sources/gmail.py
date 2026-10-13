@@ -25,6 +25,20 @@ FIRST_RUN_DAYS = 7
 MAX_PER_RUN = 50
 MAX_IMAGES = 3
 MIN_IMAGE_BYTES = 8_000  # skip tracking pixels and tiny logos
+# Account-security senders: never events, and they can contain login codes, so they never reach Claude.
+SECURITY_SENDERS = re.compile(
+    r"@(?:accounts\.google\.com|google\.com|mail\.instagram\.com|instagram\.com|facebookmail\.com|"
+    r"meta\.com|support\.facebook\.com)>?$", re.I)
+SECURITY_SUBJECT = re.compile(r"security alert|verification code|confirm your|sign[- ]in|log[- ]?in code|"
+                              r"password|2-step|two-factor|passkey|new device", re.I)
+
+
+def is_security_mail(item: Item) -> bool:
+    sender = item.author.strip()
+    subject = (item.raw or {}).get("subject", "")
+    return bool(SECURITY_SENDERS.search(sender)) or bool(SECURITY_SUBJECT.search(subject))
+
+
 SKIP_LINK = re.compile(r"unsubscribe|optout|opt-out|preferences|mailto:|privacy|/terms|facebook\.com/sharer|"
                        r"twitter\.com/intent|\.png|\.jpg|\.gif", re.I)
 
@@ -111,7 +125,12 @@ def collect(ctx: Context, conn, counts: dict) -> list[Item]:
             typ, msg_data = imap.uid("fetch", str(uid), "(BODY.PEEK[])")
             raw = next((p[1] for p in msg_data if isinstance(p, tuple)), None)
             if raw:
-                items.append(parse_message(raw, f"{validity}:{uid}", img_dir))
+                item = parse_message(raw, f"{validity}:{uid}", img_dir)
+                if is_security_mail(item):
+                    counts["mails_security_skipped"] = counts.get("mails_security_skipped", 0) + 1
+                    log.info("gmail: skipped account/security mail from %s", item.author)
+                else:
+                    items.append(item)
             db.kv_set(conn, key_u, str(uid))
         counts["mails_new"] = len(items)
         return items
