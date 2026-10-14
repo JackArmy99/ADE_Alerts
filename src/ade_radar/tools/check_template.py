@@ -47,24 +47,28 @@ def check_template(ctx: Context, name: str | None = None) -> dict | None:
 
 
 def test_whatsapp(ctx: Context, only: str | None = None) -> None:
+    """hello_world to each recipient, then a sample alert through the template set in .env (if approved)."""
     s = ctx.settings
     wa = WhatsApp(s)
     targets = {k: v for k, v in s.recipients.items() if not only or k == only.lower()}
     if not targets:
         print(f"No recipients matched ({only!r}). Check WHATSAPP_RECIPIENTS / RECIPIENT_NAMES in .env.")
         return
+    name = s.wa_template if s.wa_template != "hello_world" else "ade_alert"
     try:
-        approved = [t for t in wa.get_template("ade_alert") if t.get("status") == "APPROVED"]
+        approved = [t for t in wa.get_template(name) if t.get("status") == "APPROVED"]
     except WhatsAppError as e:
         print(f"could not read template status: {e}")
         approved = []
-    for name, phone in targets.items():
+    if not approved:
+        print(f"{name} is not approved (or not found): only hello_world is sent.")
+    for person, phone in targets.items():
         r = wa.send_template(phone, template="hello_world", lang="en_US")
-        print(f"hello_world -> {name}: {'OK ' + r.message_id if r.ok else 'FAILED ' + r.error}")
+        print(f"hello_world -> {person}: {'OK ' + r.message_id if r.ok else 'FAILED ' + r.error}")
         if approved:
             t = approved[0]
-            r = wa.send_template(phone, SAMPLE, template="ade_alert", lang=t.get("language"))
-            print(f"ade_alert   -> {name}: {'OK ' + r.message_id if r.ok else 'FAILED ' + r.error}")
+            r = wa.send_template(phone, SAMPLE, template=name, lang=t.get("language"))
+            print(f"{name} -> {person}: {'OK ' + r.message_id if r.ok else 'FAILED ' + r.error}")
 
 
 def meta_debug(ctx: Context) -> None:
