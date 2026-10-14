@@ -120,17 +120,29 @@ class Decision:
     gold: bool = False  # pop-up with a must_see artist: the top category
 
 
-POPUP = re.compile(r"pop[\s-]?up|secret (?:location|venue|guest|set|show|party)|special guest|surprise (?:set|guest)|"
-                   r"location (?:tba|to be announced|revealed)", re.I)
+DEFAULT_POPUP = ["pop-up", "pop up", "popup", "secret location", "secret show", "secret set", "special guest",
+                 "surprise set", "location tba"]
 
 
-def is_gold(item: Item, cls: Classification, m: MatchResult, persons: set[str]) -> bool:
-    """Pop-up / secret show + a must_see artist (or a priority-urgent account) = gold standard."""
+def popup_regex(taste: Taste) -> re.Pattern:
+    words = taste.popup_keywords or DEFAULT_POPUP
+    parts = (re.escape(w).replace(r"\ ", " ").replace(" ", r"[\s\-]*") for w in words)
+    return re.compile("|".join(rf"(?<!\w){p}(?!\w)" for p in parts), re.I)
+
+
+def is_popup(item: Item, cls: Classification, taste: Taste) -> bool:
     text = " ".join([item.text or "", cls.event_name or "", cls.reason or ""])
-    if not POPUP.search(text):
+    return bool(popup_regex(taste).search(text))
+
+
+def is_gold(item: Item, cls: Classification, m: MatchResult, persons: set[str], taste: Taste) -> bool:
+    """Pop-up / secret show + a must_see artist (or a priority-urgent account) = gold standard."""
+    if not is_popup(item, cls, taste):
         return False
-    return m.priority_urgent or any(m.must_see_for(p) for p in persons) or \
-        any(a for a in cls.artists if any(compact(a) == compact(n) for p in persons for n in m.must_see_for(p)))
+    must = {compact(n) for p in persons for n in m.must_see_for(p)}
+    must |= {compact(n) for p in persons for n in taste.people.get(p, {}).get("must_see", [])
+             if any(compact(a) == compact(n) for a in cls.artists)}
+    return m.priority_urgent or bool(must)
 
 
 def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Decision:
@@ -159,7 +171,9 @@ def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Dec
     if actionable and cls.ticket_status != "on_sale" and (persons or m.account):
         urgent = True
 
-    gold = is_gold(item, cls, m, persons)
+    if persons and is_popup(item, cls, ctx.taste):
+        urgent = True  # any pop-up with one of the group's artists is urgent
+    gold = is_gold(item, cls, m, persons, ctx.taste)
     if gold:
         urgent = True
         why.insert(0, "GOLD: pop-up with a must-see artist")

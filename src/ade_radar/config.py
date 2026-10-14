@@ -135,6 +135,7 @@ class Taste:
     aliases: dict[str, list[str]]
     urgent_keywords: list[str]
     ade_keywords: list[str]
+    popup_keywords: list[str]
     constraints: dict
     raw_text: str
 
@@ -152,6 +153,7 @@ def load_taste(root: Path) -> Taste:
         aliases={str(k): [str(a) for a in v] for k, v in (data.get("aliases") or {}).items()},
         urgent_keywords=[str(k) for k in data.get("urgent_keywords") or []],
         ade_keywords=[str(k) for k in data.get("ade_keywords") or []],
+        popup_keywords=[str(k) for k in data.get("popup_keywords") or []],
         constraints=data.get("constraints") or {},
         raw_text=text,
     )

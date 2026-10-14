@@ -93,3 +93,19 @@ def test_popup_with_only_like_artist_is_urgent_not_gold(ctx):
                          artists=["Marsolo"], model="claude")
     d = decide(item, cls, m.match(item.text, item.author), ctx)
     assert d.send and not d.gold and d.urgency == "urgent"  # "pop-up" is an urgent keyword
+
+
+def test_popup_wording_variants_and_new_must_see(ctx):
+    from ade_radar.match import is_popup, popup_regex
+    from ade_radar.config import load_taste
+    from tests.conftest import REPO
+    taste = load_taste(REPO)
+    r = popup_regex(taste)
+    for text in ("SECRET-LOCATION announced", "invite only rave", "Geheime locatie!", "guest list now open",
+                 "one-off takeover", "location revealed on the day", "Pop Up"):
+        assert r.search(text), text
+    assert not r.search("we popped upstairs") and not r.search("popular night")
+    m = Matcher(taste, ctx.accounts)
+    assert "Klangkuenstler" in m.match("ADE: Klangkünstler all night long").must_see_for("jack")
+    assert "Dart" in m.match("ADE: Dart b2b Bou").must_see_for("jack")
+    assert not m.match("ADE: Eli Brown live").must_see_for("jack")  # moved to like

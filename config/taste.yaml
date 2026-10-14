@@ -17,36 +17,41 @@ people:
       - Gorgon City
       - CAMELPHAT
       - Solardo
-      - Eli Brown
       - SOSA
       - Clouds
-      - Joshwa
       - Riordan
-      - MK
+      - Klangkuenstler
+      - Cloudy MP3
+      - Ben Techy
+      - Mall Grab
+      - Ewan McVicar
+      - Benwal
+      - CHRIS STASSY
+      - Tommy Holohan
+      - Interplanetary Criminal
+      - Silva Bumpa
+      - Club Angel
+      - Bella Claxton
+      - LAMMER
+      - Dart
     like:              # alert if on an ADE lineup
+      - Eli Brown
+      - Joshwa
+      - MK
       - Chris Lorenzo
       - Patrick Topping
-      - Mall Grab
       - Will Clarke
-      - Ewan McVicar
       - PAWSA
       - Michael Bibi
       - Known Artist
       - Marsolo
-      - Benwal
       - Locky
       - Sammy Virji
-      - CHRIS STASSY
-      - Tommy Holohan
       - DJ HEARTSTRING
       - IDEMI
       - Soul Mass Transit System
       - Obskür
-      - Interplanetary Criminal
       - Gaskin
-      - Club Angel
-      - Silva Bumpa
-      - Dart
       - Vivace
       - Kolter
       - Sam Alfred
@@ -66,8 +71,6 @@ people:
       - Ben Hemsley
       - Kara Okay
       - Jacob Matthews
-      - Bella Claxton     # Paige Tomlinson's regular b2b partner
-      - LAMMER            # touring with Paige Tomlinson
       - ALISHA
     brands_like:       # event brands / labels; a post from these about ADE matters
       - Social Pleasure
@@ -122,6 +125,9 @@ aliases:
   "CAMELPHAT": ["camelphat", "camel phat"]
   "Paige Tomlinson": ["paige tomlinson", "paigetomlinson"]
   "Soul Mass Transit System": ["smts", "soul mass transit system"]
+  "Klangkuenstler": ["klangkuenstler", "klangkunstler", "klangkünstler", "klang kuenstler"]
+  "Cloudy MP3": ["cloudy mp3", "cloudymp3", "cloudy.mp3"]
+  "Ben Techy": ["ben techy", "bentechy"]
 
 urgent_keywords:     # any of these in an ADE-related post or mail = URGENT
   - presale
@@ -151,6 +157,48 @@ urgent_keywords:     # any of these in an ADE-related post or mail = URGENT
   - popup
   - tickets live
   - on sale now
+
+popup_keywords:      # pop-up / secret-show wording; any of these + a must_see artist = GOLD alert
+  - pop-up
+  - pop up
+  - popup
+  - secret location
+  - secret venue
+  - secret show
+  - secret set
+  - secret party
+  - secret rave
+  - secret guest
+  - special guest
+  - surprise set
+  - surprise guest
+  - surprise show
+  - unannounced
+  - location tba
+  - location tbc
+  - location revealed
+  - address revealed
+  - revealed on the day
+  - invite only
+  - invite-only
+  - private party
+  - intimate show
+  - intimate set
+  - one-off
+  - one off
+  - limited capacity
+  - guestlist
+  - guest list
+  - rsvp
+  - takeover
+  - afterparty
+  - after party
+  - boat party
+  - rooftop
+  - free party
+  - geheime locatie
+  - verrassing
+  - speciale gast
 
 ade_keywords:        # helps decide if a post is about ADE week
   - ADE
