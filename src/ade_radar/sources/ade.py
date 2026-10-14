@@ -356,13 +356,13 @@ def fetch_listing(ctx: Context, f: Fetcher, counts: dict) -> list[dict]:
         except (requests.RequestException, ValueError) as e:
             log.warning("ADE JSON endpoint failed (%s); falling back to HTML", e)
     counts["listing_mode"] = "html"
-    events = fetch_html_listing(f)
+    events = fetch_html_listing(f, filter_url(ctx))
     if events:
         return events
     # The programme is built by JavaScript: a plain download has no events, so render it in hidden Chrome.
     log.info("ADE listing: no events in the plain HTML, rendering it in headless Chrome")
     counts["listing_mode"] = "rendered"
-    return f.render_listing(FILTER_URL)
+    return f.render_listing(filter_url(ctx))
 
 
 def fetch_json_listing(cfg: dict, f: Fetcher) -> list[dict]:
@@ -386,11 +386,15 @@ def fetch_json_listing(cfg: dict, f: Fetcher) -> list[dict]:
     return list(events.values())
 
 
-def fetch_html_listing(f: Fetcher) -> list[dict]:
+def filter_url(ctx: Context) -> str:
+    return ctx.settings.ade_filter_url or FILTER_URL
+
+
+def fetch_html_listing(f: Fetcher, url: str = FILTER_URL) -> list[dict]:
     events: dict[str, dict] = {}
     for page in range(1, MAX_PAGES + 1):
-        url = FILTER_URL + (f"&page={page}" if page > 1 else "")
-        batch = parse_listing_html(f.get(url).text)
+        page_url = url + (f"&page={page}" if page > 1 else "")
+        batch = parse_listing_html(f.get(page_url).text)
         new = [e for e in batch if e["ade_id"] not in events]
         for e in new:
             events[e["ade_id"]] = e
@@ -560,7 +564,7 @@ def discover(ctx: Context) -> Path:
                 pass
 
         page.on("response", on_response)
-        page.goto(FILTER_URL, wait_until="networkidle", timeout=90_000)
+        page.goto(filter_url(ctx), wait_until="networkidle", timeout=90_000)
         for _ in range(4):
             page.mouse.wheel(0, 3000)
             page.wait_for_timeout(1500)
