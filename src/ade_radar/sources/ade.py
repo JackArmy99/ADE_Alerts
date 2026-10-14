@@ -283,6 +283,18 @@ class Fetcher:
                 stale = stale + 1 if len(events) == before else 0
                 if stale >= 3:
                     break
+            # Numbered pages instead of (or after) "load more": try ?page=2, 3, ... until nothing new appears.
+            sep = "&" if "?" in url else "?"
+            for n in range(2, MAX_PAGES + 1):
+                before = len(events)
+                try:
+                    page.goto(f"{url}{sep}page={n}", wait_until="networkidle", timeout=90_000)
+                except Exception as e:  # noqa: BLE001 - keep what we already have
+                    log.warning("ADE listing page %d failed: %s", n, e)
+                    break
+                _merge_listing(events, parse_listing_html(page.content()))
+                if len(events) == before:
+                    break
         finally:
             page.close()
         return list(events.values())
@@ -509,6 +521,26 @@ def _alert(conn, ctx: Context, wa, ev: dict, m, change: str, stats: AlertStats, 
 
 # ---- discovery (run on Jack's laptop) --------------------------------------
 
+def _print_page_hints(page) -> None:
+    """What the page itself says about its size and navigation, to tell 'all events' from 'first page'."""
+    try:
+        text = page.locator("body").inner_text(timeout=5000)
+    except Exception:  # noqa: BLE001
+        text = ""
+    counts = sorted(set(re.findall(r"\b\d[\d.,]*\s+(?:events?|results?|resultaten|evenementen)\b", text, re.I)))
+    print(f"page says: {', '.join(counts[:5]) or '(no total count shown)'}")
+    hints = page.evaluate("""() => Array.from(document.querySelectorAll('a, button')).map(e => ({
+        t: (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 40),
+        h: e.getAttribute('href') || ''})).filter(x =>
+        /^(\\d+|next|volgende|load more|show more|meer|more|»|›|>)$/i.test(x.t) || /page=|pagina/i.test(x.h))""")
+    seen = []
+    for h in hints:
+        key = f"{h['t']!r} {h['h'][:80]}"
+        if key not in seen:
+            seen.append(key)
+    print("navigation: " + ("; ".join(seen[:12]) if seen else "(no next / page / load-more controls found)"))
+
+
 def discover(ctx: Context) -> Path:
     """Open the filter page, capture JSON responses, save them as fixtures and pick the event list endpoint."""
     from playwright.sync_api import sync_playwright
@@ -533,6 +565,7 @@ def discover(ctx: Context) -> Path:
             page.mouse.wheel(0, 3000)
             page.wait_for_timeout(1500)
         (out / "filter_page.html").write_text(page.content(), encoding="utf-8")
+        _print_page_hints(page)
         browser.close()
     best = None
     for i, (url, data) in enumerate(captured):
