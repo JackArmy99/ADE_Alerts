@@ -492,6 +492,33 @@ def _stale(old: dict) -> bool:
     return (now() - t).total_seconds() > DETAIL_REFRESH_HOURS * 3600
 
 
+def ade_route(change: str, m, ctx: Context) -> str:
+    """WhatsApp only for what matters on the day; the rest goes to the 09:00 digest or is dropped.
+    whatsapp: new event / lineup addition / set times involving a must_see artist.
+    digest:   new events and lineup additions with 'like' artists, sold out changes.
+    ignore:   lineup changes without any of the group's artists."""
+    must = {compact(n) for p in m.hits for n in m.must_see_for(p)}
+    liked = {compact(h.name) for hits in m.hits.values() for h in hits if h.level in ("must_see", "like")}
+    if change.startswith("lineup:"):
+        added = {compact(clean_artist(a)) for a in change.split(":", 1)[1].split(",")}
+        if added & must:
+            return "whatsapp"
+        return "digest" if added & liked else "ignore"
+    if change in ("new", "set_times"):
+        return "whatsapp" if must else "digest"
+    return "digest"  # sold_out and anything else
+
+
+def _digest_text(change: str, ev: dict) -> str:
+    if change == "new":
+        return "new on the ADE programme"
+    if change.startswith("lineup:"):
+        return "lineup added " + change.split(":", 1)[1]
+    if change == "sold_out":
+        return "now sold out"
+    return change.replace("_", " ")
+
+
 def _alert(conn, ctx: Context, wa, ev: dict, m, change: str, stats: AlertStats, dry_run: bool) -> None:
     lineup = ev.get("lineup", [])
     matched = [h.name for hits in m.hits.values() for h in hits if h.level in ("must_see", "like")]
@@ -506,6 +533,15 @@ def _alert(conn, ctx: Context, wa, ev: dict, m, change: str, stats: AlertStats, 
                          model="rules")
     d = decide(item, cls, m, ctx)
     if not d.send:
+        return
+    route = ade_route(change, m, ctx)
+    log.info("ADE %s %s -> %s (%s)", ev["ade_id"], ev.get("title", ""), route, change)
+    if route == "ignore":
+        return
+    if route == "digest":
+        db.save_teaser(conn, f"{item.id}:{change}", "ADE programme", ev.get("url", ""),
+                       f"{ev.get('title', '')}: {_digest_text(change, ev)}", d.recipients)
+        stats.skipped += 1
         return
     if change == "new":
         detail, kind = ("on ADE programme, already SOLD OUT" if ev.get("sold_out") else "new on ADE programme"), \

@@ -140,3 +140,17 @@ def test_render_listing_clicks_load_more_until_done(tmp_path, monkeypatch):
         events = f.render_listing(page_file.as_uri())
         browser.close()
     assert len(events) == 30 and events[0]["title"].startswith("Event")
+
+
+def test_ade_route_keeps_whatsapp_for_must_see_only(ctx):
+    from ade_radar.match import Matcher
+    m = Matcher(ctx.taste, ctx.accounts)
+    must = m.match("Gashouder presents", "", ["Josh Baker", "Marsolo"])       # Josh Baker = must_see
+    like = m.match("Some night", "", ["Marsolo", "Random DJ"])                 # Marsolo = like
+    assert ade.ade_route("new", must, ctx) == "whatsapp"
+    assert ade.ade_route("new", like, ctx) == "digest"
+    assert ade.ade_route("lineup:Josh Baker", must, ctx) == "whatsapp"
+    assert ade.ade_route("lineup:Marsolo", must, ctx) == "digest"
+    assert ade.ade_route("lineup:Random DJ", like, ctx) == "ignore"
+    assert ade.ade_route("sold_out", must, ctx) == "digest"
+    assert ade.ade_route("set_times", must, ctx) == "whatsapp"

@@ -118,11 +118,11 @@ def teaser_digest(conn, ctx: Context, dry_run: bool, limit: int) -> str:
     if not rows:
         return ""
     lines = [f"@{r['author']}: {r['summary']} {r['url']}".strip() for r in rows]
-    full = "ADE teasers (no date/venue/link yet):\n" + "\n".join(lines)
+    full = "ADE teasers and programme updates:\n" + "\n".join(lines)
     ntfy.send(ctx.settings, full, title=f"ade-radar: {len(rows)} ADE teasers", dry_run=dry_run)
     short = "; ".join(f"@{r['author']}" for r in rows)
-    params = ["ADE teasers (no details yet)", now().strftime("%a %d %b"), f"{len(rows)} posts",
-              clean_param("Watch: " + short)]
+    params = ["ADE teasers and programme updates", now().strftime("%a %d %b"), f"{len(rows)} items",
+              clean_param("Full list in ntfy. " + short)]
     _to_owner(ctx, params, dry_run)
     if not dry_run:
         conn.executemany("UPDATE teasers SET digested_at=? WHERE item_id=?", [(db.ts(), r["item_id"]) for r in rows])
