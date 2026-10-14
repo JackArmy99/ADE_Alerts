@@ -1,4 +1,8 @@
 import json
+from pathlib import Path
+import os
+
+import pytest
 
 from ade_radar.alerts import AlertStats
 from ade_radar.sources import ade
@@ -6,6 +10,7 @@ from ade_radar.sources import ade
 from .conftest import FIXTURES
 
 F = FIXTURES / "ade"
+CHROMIUM = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")) / "chromium"
 
 
 def test_parse_listing():
@@ -48,6 +53,17 @@ def test_diff():
 class FakeFetcher:
     def __init__(self, pages):
         self.pages = pages
+        self.rendered = 0
+
+    def render(self, url):
+        self.rendered += 1
+        return self.get(url).text
+
+    def render_listing(self, url):
+        return ade.parse_listing_html(self.pages.get("RENDERED", ""))
+
+    def close(self):
+        pass
 
     def get(self, url, **kw):
         for key, text in self.pages.items():
@@ -91,3 +107,36 @@ def test_run_baseline_then_lineup_change(conn, ctx, fake_wa, monkeypatch):
     stats3 = AlertStats()
     ade.run(ctx, conn, {}, wa=fake_wa, stats=stats3, dry_run=False)
     assert stats3.sent == 0  # nothing changed -> nothing sent
+
+
+def test_listing_falls_back_to_rendering_when_plain_html_is_empty(ctx):
+    pages = {"program/filter": "<html><body><div id='app'></div></body></html>",
+             "RENDERED": (F / "listing_synthetic.html").read_text()}
+    counts = {}
+    events = ade.fetch_listing(ctx, FakeFetcher(pages), counts)
+    assert counts["listing_mode"] == "rendered" and len(events) == 3
+
+
+LOAD_MORE_PAGE = """<html><body><main id="list"></main><button id="more">Load more</button><script>
+let n = 0;
+function add(k) { for (let i = 0; i < k; i++) { n++; const a = document.createElement('a');
+  a.href = '/en/program/2026/event-' + n + '/' + (3000000 + n) + '/'; a.innerHTML = '<h3>Event ' + n + '</h3>';
+  document.getElementById('list').appendChild(a); }
+  if (n >= 30) document.getElementById('more').remove(); }
+add(10); document.getElementById('more').onclick = () => add(10);
+</script></body></html>"""
+
+
+@pytest.mark.skipif(not CHROMIUM.exists(), reason="no local chromium")
+def test_render_listing_clicks_load_more_until_done(tmp_path, monkeypatch):
+    from playwright.sync_api import sync_playwright
+    page_file = tmp_path / "listing.html"
+    page_file.write_text(LOAD_MORE_PAGE)
+    monkeypatch.setattr(ade, "MAX_RENDER_ROUNDS", 10)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(executable_path=str(CHROMIUM), headless=True)
+        f = ade.Fetcher()
+        f._browser = browser
+        events = f.render_listing(page_file.as_uri())
+        browser.close()
+    assert len(events) == 30 and events[0]["title"].startswith("Event")

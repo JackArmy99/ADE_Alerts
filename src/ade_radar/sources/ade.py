@@ -35,7 +35,7 @@ LINEUP_NAME = re.compile(r"^\s*([^\n()]{2,60}?)\s*\(([A-Z]{2,3}(?:[/,]\s*[A-Z]{2
 SET_TIME = re.compile(r"\b([01]?\d|2[0-3])[:.]([0-5]\d)\s*[-–]\s*([01]?\d|2[0-3])[:.]([0-5]\d)\b")
 SOLD_OUT = re.compile(r"\bsold[\s-]*out\b|\buitverkocht\b", re.I)
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36"
-MAX_DETAIL_FETCHES = 150
+MAX_DETAIL_FETCHES = 100  # keeps a run well inside the 15-minute task limit, even when pages need rendering
 MAX_PAGES = 80
 DETAIL_REFRESH_HOURS = 24
 
@@ -221,16 +221,111 @@ def diff(old: dict | None, new: dict) -> list[str]:
 
 # ---- fetching --------------------------------------------------------------
 
+LOAD_MORE = re.compile(r"^\s*(load more|show more|more events|view more|meer laden|toon meer|meer tonen|laad meer)\s*$",
+                       re.I)
+COOKIE_OK = re.compile(r"^\s*(accept|accept all|allow all|agree|ok|i agree|akkoord|accepteren|alles accepteren)\s*$",
+                       re.I)
+MAX_RENDER_ROUNDS = 60
+MAX_RENDERED_DETAILS = 60
+
+
 class Fetcher:
+    """Plain HTTP first; a hidden Chrome renders pages the site builds with JavaScript."""
+
     def __init__(self):
         self.http = requests.Session()
         self.http.headers.update({"User-Agent": UA, "Accept-Language": "en-GB,en;q=0.9"})
+        self._pw = None
+        self._browser = None
+        self.rendered = 0
 
     def get(self, url: str, **kw) -> requests.Response:
         r = self.http.get(url, timeout=30, **kw)
         r.raise_for_status()
         time.sleep(random.uniform(0.5, 1.2))
         return r
+
+    def _page(self):
+        if self._browser is None:
+            from playwright.sync_api import sync_playwright
+            self._pw = sync_playwright().start()
+            try:
+                self._browser = self._pw.chromium.launch(channel="chrome", headless=True)
+            except Exception:  # noqa: BLE001 - no installed Chrome: Playwright's own Chromium
+                self._browser = self._pw.chromium.launch(headless=True)
+        return self._browser.new_page(user_agent=UA, locale="en-GB", viewport={"width": 1280, "height": 1600})
+
+    def render(self, url: str) -> str:
+        page = self._page()
+        try:
+            page.goto(url, wait_until="networkidle", timeout=60_000)
+            accept_cookies(page)
+            self.rendered += 1
+            return page.content()
+        finally:
+            page.close()
+
+    def render_listing(self, url: str) -> list[dict]:
+        """Open the listing, then scroll and press 'load more' until no new events appear."""
+        page = self._page()
+        events: dict[str, dict] = {}
+        try:
+            page.goto(url, wait_until="networkidle", timeout=90_000)
+            accept_cookies(page)
+            stale = 0
+            for _ in range(MAX_RENDER_ROUNDS):
+                before = len(events)
+                _merge_listing(events, parse_listing_html(page.content()))
+                click_load_more(page)
+                page.mouse.wheel(0, 6000)
+                page.wait_for_timeout(1500)
+                _merge_listing(events, parse_listing_html(page.content()))
+                stale = stale + 1 if len(events) == before else 0
+                if stale >= 3:
+                    break
+        finally:
+            page.close()
+        return list(events.values())
+
+    def close(self) -> None:
+        try:
+            if self._browser is not None:
+                self._browser.close()
+            if self._pw is not None:
+                self._pw.stop()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _merge_listing(events: dict[str, dict], batch: list[dict]) -> None:
+    for e in batch:
+        old = events.get(e["ade_id"])
+        if old is None or len(e.get("title", "")) > len(old.get("title", "")):
+            events[e["ade_id"]] = e
+
+
+def accept_cookies(page) -> None:
+    try:
+        btn = page.get_by_role("button", name=COOKIE_OK)
+        if btn.count():
+            btn.first.click(timeout=3000)
+            page.wait_for_timeout(800)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def click_load_more(page) -> bool:
+    for role in ("button", "link"):
+        try:
+            more = page.get_by_role(role, name=LOAD_MORE)
+            if more.count():
+                more.first.scroll_into_view_if_needed(timeout=3000)
+                more.first.click(timeout=5000)
+                page.wait_for_timeout(2000)
+                return True
+        except Exception:  # noqa: BLE001
+            continue
+    return False
 
 
 def endpoint_path(ctx: Context) -> Path:
@@ -249,7 +344,13 @@ def fetch_listing(ctx: Context, f: Fetcher, counts: dict) -> list[dict]:
         except (requests.RequestException, ValueError) as e:
             log.warning("ADE JSON endpoint failed (%s); falling back to HTML", e)
     counts["listing_mode"] = "html"
-    return fetch_html_listing(f)
+    events = fetch_html_listing(f)
+    if events:
+        return events
+    # The programme is built by JavaScript: a plain download has no events, so render it in hidden Chrome.
+    log.info("ADE listing: no events in the plain HTML, rendering it in headless Chrome")
+    counts["listing_mode"] = "rendered"
+    return f.render_listing(FILTER_URL)
 
 
 def fetch_json_listing(cfg: dict, f: Fetcher) -> list[dict]:
@@ -290,6 +391,8 @@ def fetch_details(f: Fetcher, ev: dict) -> dict:
     out = dict(ev)
     if ev.get("url"):
         page = parse_event_html(f.get(ev["url"]).text)
+        if not page["lineup"] and f.rendered < MAX_RENDERED_DETAILS:
+            page = parse_event_html(f.render(ev["url"]))  # event page built by JavaScript
         out["title"] = ev.get("title") or page["title"]
         out["lineup"] = page["lineup"] or ev.get("lineup", [])
         out["sold_out"] = page["sold_out"] or ev.get("sold_out", False)
@@ -314,6 +417,14 @@ def _persons(matcher: Matcher, ev: dict):
 
 def run(ctx: Context, conn, counts: dict, *, wa, stats: AlertStats, dry_run: bool) -> None:
     f = Fetcher()
+    try:
+        _run(ctx, conn, counts, f, wa=wa, stats=stats, dry_run=dry_run)
+    finally:
+        counts["pages_rendered"] = f.rendered
+        f.close()
+
+
+def _run(ctx: Context, conn, counts: dict, f, *, wa, stats: AlertStats, dry_run: bool) -> None:
     listing = fetch_listing(ctx, f, counts)
     counts["events_listed"] = len(listing)
     if not listing:
