@@ -78,6 +78,7 @@ def run_source(ctx: Context, source: str, dry_run: bool = False, force: bool = F
     counts: dict = {}
     stats = AlertStats()
     classifier = Classifier(ctx)
+    classifier.spent_today, classifier.spent_total = db.spend_so_far(conn)
     wa = None if dry_run else WhatsApp(s)
     ok, error = True, ""
     try:
@@ -116,6 +117,9 @@ def run_source(ctx: Context, source: str, dry_run: bool = False, force: bool = F
             log.error("retrying failed alerts failed:\n%s", traceback.format_exc())
     counts.update({"alerts_" + k: v for k, v in stats.as_dict().items()})
     counts.update({"claude_" + k: v for k, v in classifier.usage.as_dict().items()})
+    db.add_spend(conn, classifier.usage.cost)  # real money, also in dry runs
+    conn.commit()
+    _budget_notices(conn, ctx, classifier, dry_run)
     db.finish_run(conn, run_id, ok, counts, error)
     log.info("run %s finished ok=%s counts=%s", source, ok, json.dumps(counts, sort_keys=True))
     if stats.failed >= 3:
@@ -125,6 +129,23 @@ def run_source(ctx: Context, source: str, dry_run: bool = False, force: bool = F
         check_fail_streak(conn, ctx, source, dry_run)
     conn.close()
     return {"ok": ok, "error": error, **counts}
+
+
+def _budget_notices(conn, ctx: Context, classifier: Classifier, dry_run: bool) -> None:
+    """ntfy once per day when the Claude budget is 80% used or reached."""
+    s = ctx.settings
+    today, total = db.spend_so_far(conn)
+    day = now().date().isoformat()
+    if classifier.usage.skipped_budget and db.kv_get(conn, f"budget_cap_notified_{day}") is None:
+        ntfy.error(s, f"Claude budget reached (today EUR {today:.2f} of {s.claude_budget_daily:.2f}, total "
+                   f"EUR {total:.2f} of {s.claude_budget_total:.2f}). Using keyword rules only until it resets.",
+                   dry_run=dry_run)
+        db.kv_set(conn, f"budget_cap_notified_{day}", "1")
+    elif total >= 0.8 * s.claude_budget_total and db.kv_get(conn, "budget_80_notified") is None:
+        ntfy.send(s, f"Claude spend EUR {total:.2f} of the EUR {s.claude_budget_total:.2f} cap.",
+                  title="ade-radar budget 80%", priority="high", dry_run=dry_run)
+        db.kv_set(conn, "budget_80_notified", "1")
+    conn.commit()
 
 
 def check_fail_streak(conn, ctx: Context, source: str, dry_run: bool = False) -> None:

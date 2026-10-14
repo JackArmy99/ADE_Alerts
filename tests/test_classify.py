@@ -72,3 +72,28 @@ def test_build_content_includes_image(tmp_path):
 def test_extract_json():
     assert extract_json('noise {"a": 1} tail') == {"a": 1}
     assert extract_json("nothing") is None
+
+
+def test_budget_cap_stops_claude(ctx):
+    c, msgs = make(ctx, [json.dumps(GOOD)] * 3)
+    c.spent_total = ctx.settings.claude_budget_total - 0.001  # almost at the EUR cap
+    assert c.classify(Item("instagram", "a"), "today") is None
+    assert c.usage.skipped_budget == 1 and not msgs.calls
+
+
+def test_daily_cap_and_cost(ctx):
+    c, msgs = make(ctx, [json.dumps(GOOD)] * 2)
+    c.spent_today = ctx.settings.claude_budget_daily - 0.002
+    assert c.classify(Item("instagram", "a"), "today") is None  # under MAX_CALL_COST left today
+    c.spent_today = 0
+    assert c.classify(Item("instagram", "b"), "today") is not None
+    # 100 in, 50 out, 80 cache-read tokens at Haiku 5.5 prices
+    assert abs(c.usage.cost - (100 * 0.10 + 50 * 0.50 + 80 * 0.01) / 1e6) < 1e-12
+
+
+def test_spend_ledger(conn):
+    from ade_radar import db
+    db.add_spend(conn, 0.25)
+    db.add_spend(conn, 0.5)
+    today, total = db.spend_so_far(conn)
+    assert round(today, 2) == 0.75 and round(total, 2) == 0.75

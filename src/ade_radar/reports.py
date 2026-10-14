@@ -78,8 +78,10 @@ def heartbeat_summary(conn) -> tuple[str, bool]:
             totals["mails"] += int(c.get("mails_new", 0) or 0)
             totals["claude"] += int(c.get("claude_calls", 0) or 0)
     sent = conn.execute("SELECT COUNT(*) FROM alerts WHERE status='sent' AND sent_at>=?", (since,)).fetchone()[0]
+    today_eur, total_eur = db.spend_so_far(conn)
     text = (f"{', '.join(parts)}. IG posts/stories checked {totals['posts']}, mails {totals['mails']}, "
-            f"alerts sent {sent}, Claude calls {totals['claude']}")
+            f"alerts sent {sent}, Claude calls {totals['claude']}, Claude spend EUR {today_eur:.2f} today / "
+            f"EUR {total_eur:.2f} total")
     return text, healthy
 
 

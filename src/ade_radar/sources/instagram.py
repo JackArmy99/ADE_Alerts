@@ -24,7 +24,6 @@ MAX_POSTS = 40
 FIRST_RUN_MAX_POSTS = 20
 FIRST_RUN_MAX_AGE_HOURS = 72
 MAX_STORY_FRAMES = 40
-MIN_MINUTES_BETWEEN_RUNS = 50
 STOP_AFTER_SEEN = 3
 STOP_AFTER_OLD = 3  # consecutive posts older than the age limit (chronological feed only)
 MAX_SCROLLS = 30
@@ -177,8 +176,9 @@ def _stamp(ctx: Context) -> None:
 
 def collect(ctx: Context, conn, counts: dict, force: bool = False, dry_run: bool = False) -> list[Item]:
     since = minutes_since_last_run(ctx)
-    if since is not None and since < MIN_MINUTES_BETWEEN_RUNS and not force:
-        log.info("instagram: last run %.0f min ago, skipping (max one run per hour; --force overrides)", since)
+    if since is not None and since < ctx.settings.ig_min_minutes and not force:
+        log.info("instagram: last run %.0f min ago, skipping (min %.0f min between runs; --force overrides)", since,
+                 ctx.settings.ig_min_minutes)
         counts["skipped_rate_limit"] = 1
         return []
     _stamp(ctx)

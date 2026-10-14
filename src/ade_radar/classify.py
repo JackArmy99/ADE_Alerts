@@ -77,6 +77,13 @@ SCHEMA = {
 }
 
 
+# Claude Haiku 5.5 list prices in USD per million tokens. Counted 1:1 as euros (a dollar is worth less than a
+# euro), so the euro budget errs on the safe side.
+PRICE_IN, PRICE_OUT, PRICE_CACHE_READ, PRICE_CACHE_WRITE = 0.10, 0.50, 0.01, 0.125
+# Stop before a call that could cross the cap (a worst-case call: big screenshot + long answer).
+MAX_CALL_COST = 0.004
+
+
 @dataclass
 class Usage:
     calls: int = 0
@@ -86,9 +93,15 @@ class Usage:
     cache_write: int = 0
     errors: int = 0
     skipped_cap: int = 0
+    skipped_budget: int = 0
+
+    @property
+    def cost(self) -> float:
+        return (self.input_tokens * PRICE_IN + self.output_tokens * PRICE_OUT + self.cache_read * PRICE_CACHE_READ
+                + self.cache_write * PRICE_CACHE_WRITE) / 1_000_000
 
     def as_dict(self) -> dict:
-        return dict(self.__dict__)
+        return {**self.__dict__, "cost_eur": round(self.cost, 4)}
 
 
 @dataclass
@@ -97,6 +110,8 @@ class Classifier:
     max_calls: int | None = None
     client: object | None = None
     usage: Usage = field(default_factory=Usage)
+    spent_today: float = 0.0  # euros already spent before this run (from the database)
+    spent_total: float = 0.0
     _use_schema: bool = True
 
     def __post_init__(self):
@@ -112,7 +127,12 @@ class Classifier:
 
     @property
     def available(self) -> bool:
-        return self.client is not None and self.usage.calls < (self.max_calls or 0)
+        return self.client is not None and self.usage.calls < (self.max_calls or 0) and self.budget_left() >= MAX_CALL_COST
+
+    def budget_left(self) -> float:
+        s = self.ctx.settings
+        run = self.usage.cost
+        return min(s.claude_budget_total - self.spent_total - run, s.claude_budget_daily - self.spent_today - run)
 
     def classify(self, item: Item, today: str) -> Classification | None:
         """Returns None when Claude is unavailable (no key, cap reached, or API error); caller falls back to rules."""
@@ -120,6 +140,9 @@ class Classifier:
             return None
         if self.usage.calls >= (self.max_calls or 0):
             self.usage.skipped_cap += 1
+            return None
+        if self.budget_left() < MAX_CALL_COST:
+            self.usage.skipped_budget += 1  # spending cap reached: keyword rules only
             return None
         content = build_content(item, today)
         self.usage.calls += 1

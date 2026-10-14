@@ -204,3 +204,18 @@ def note_suggestion(conn, handle: str, via: str) -> None:
             vias.append(via)
         conn.execute("UPDATE suggested_follows SET times_seen=times_seen+1, seen_via=? WHERE handle=?",
                      (",".join(vias), handle))
+
+
+# ---- Claude spending ledger (euros) ------------------------------------------
+
+def spend_so_far(conn) -> tuple[float, float]:
+    today = now().date().isoformat()
+    return float(kv_get(conn, f"claude_spend_{today}", "0") or 0), float(kv_get(conn, "claude_spend_total", "0") or 0)
+
+
+def add_spend(conn, amount: float) -> None:
+    if amount <= 0:
+        return
+    today_spent, total = spend_so_far(conn)
+    kv_set(conn, f"claude_spend_{now().date().isoformat()}", f"{today_spent + amount:.6f}")
+    kv_set(conn, "claude_spend_total", f"{total + amount:.6f}")

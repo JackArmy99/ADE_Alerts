@@ -36,6 +36,8 @@ class Settings:
     anthropic_api_key: str = ""
     claude_model: str = "claude-haiku-5-5"
     claude_max_calls: int = 60
+    claude_budget_total: float = 20.0  # euros, hard cap for the whole ADE period
+    claude_budget_daily: float = 2.0   # euros per day
     wa_token: str = ""
     wa_phone_number_id: str = ""
     wa_waba_id: str = ""
@@ -50,6 +52,7 @@ class Settings:
     ntfy_topic: str = ""
     ig_profile_dir: Path = Path("data/ig_profile")
     ig_max_age_hours: float = 48  # posts older than this are never alerted on
+    ig_min_minutes: float = 25  # at most one Instagram run per this many minutes (scheduled every 30)
     ade_filter_url: str = ""  # ADE programme listing to watch; empty = the default in sources/ade.py
 
     @property
@@ -95,6 +98,8 @@ def load_settings(root: Path | None = None) -> Settings:
         anthropic_api_key=e("ANTHROPIC_API_KEY", ""),
         claude_model=e("CLAUDE_MODEL") or "claude-haiku-5-5",
         claude_max_calls=int(e("CLAUDE_MAX_CALLS_PER_RUN") or 60),
+        claude_budget_total=float(e("CLAUDE_BUDGET_TOTAL_EUR") or 20),
+        claude_budget_daily=float(e("CLAUDE_BUDGET_DAILY_EUR") or 2),
         wa_token=e("WHATSAPP_TOKEN", ""),
         wa_phone_number_id=e("WHATSAPP_PHONE_NUMBER_ID", ""),
         wa_waba_id=e("WHATSAPP_WABA_ID", ""),
@@ -109,6 +114,7 @@ def load_settings(root: Path | None = None) -> Settings:
         ntfy_topic=e("NTFY_TOPIC", ""),
         ig_profile_dir=ig_dir if ig_dir.is_absolute() else root / ig_dir,
         ig_max_age_hours=float(e("IG_MAX_AGE_HOURS") or 48),
+        ig_min_minutes=float(e("IG_MIN_MINUTES") or 25),
         ade_filter_url=e("ADE_FILTER_URL", ""),
     )
 
