@@ -44,6 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--file", default="config/handles_tier2.txt")
     f.add_argument("--propose", action="store_true", help="look up handles and write --file for review")
     sub.add_parser("ade-discover", help="find the JSON endpoint behind the ADE filter page")
+    sub.add_parser("meta-debug", help="ask Meta about the token, app, WhatsApp account and number")
     sub.add_parser("status", help="last runs per source and alert counts")
     sub.add_parser("email-report", help="per sender: are the ADE emails timely and useful?")
 
@@ -83,6 +84,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "test-whatsapp":
         from .tools.check_template import test_whatsapp
         test_whatsapp(ctx, args.to)
+        return 0
+    if args.cmd == "meta-debug":
+        from .tools.check_template import meta_debug
+        meta_debug(ctx)
         return 0
     if args.cmd == "check-template":
         from .tools.check_template import check_template

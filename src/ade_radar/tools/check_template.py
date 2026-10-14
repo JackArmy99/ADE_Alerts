@@ -65,3 +65,41 @@ def test_whatsapp(ctx: Context, only: str | None = None) -> None:
             t = approved[0]
             r = wa.send_template(phone, SAMPLE, template="ade_alert", lang=t.get("language"))
             print(f"ade_alert   -> {name}: {'OK ' + r.message_id if r.ok else 'FAILED ' + r.error}")
+
+
+def meta_debug(ctx: Context) -> None:
+    """Ask Meta what it thinks of the token, the app, the WhatsApp account and the phone number."""
+    import requests
+
+    s = ctx.settings
+    base = f"https://graph.facebook.com/{s.wa_api_version}"
+    auth = {"Authorization": f"Bearer {s.wa_token}"}
+
+    def get(path: str, **params) -> dict:
+        try:
+            r = requests.get(f"{base}/{path}", headers=auth, params=params, timeout=30)
+            return r.json()
+        except (requests.RequestException, ValueError) as e:
+            return {"error": {"message": type(e).__name__}}
+
+    def show(title: str, data: dict) -> None:
+        err = data.get("error")
+        if err:
+            print(f"{title}: ERROR code {err.get('code')} subcode {err.get('error_subcode')}: {err.get('message')}"
+                  + (f" | {err.get('error_user_msg')}" if err.get("error_user_msg") else ""))
+        else:
+            print(f"{title}: OK {json.dumps(data, ensure_ascii=False)[:400]}")
+
+    tok = get("debug_token", input_token=s.wa_token).get("data", {})
+    if tok:
+        print(f"token: valid={tok.get('is_valid')} app_id={tok.get('app_id')} type={tok.get('type')} "
+              f"expires={tok.get('expires_at') or 'never'} scopes={','.join(tok.get('scopes', []))}")
+        if tok.get("error"):
+            print(f"token error: {tok['error']}")
+    else:
+        show("token", get("debug_token", input_token=s.wa_token))
+    show("me (system user)", get("me", fields="id,name"))
+    if tok.get("app_id"):
+        show("app", get(str(tok["app_id"]), fields="id,name"))
+    show("whatsapp account", get(s.wa_waba_id, fields="id,name,account_review_status,business_verification_status"))
+    show("phone number", get(s.wa_phone_number_id, fields="display_phone_number,verified_name,status,quality_rating"))
