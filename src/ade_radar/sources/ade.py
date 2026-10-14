@@ -493,18 +493,18 @@ def _stale(old: dict) -> bool:
 
 
 def ade_route(change: str, m, ctx: Context) -> str:
-    """WhatsApp only for what matters on the day; the rest goes to the 09:00 digest or is dropped.
-    whatsapp: new event / lineup addition / set times involving a must_see artist.
-    digest:   new events and lineup additions with 'like' artists, sold out changes.
+    """whatsapp: a new event or a lineup addition with any of the group's artists (must_see or like), set times
+                 for a must_see artist.
+    digest:   sold out changes, set times for 'like' artists.
     ignore:   lineup changes without any of the group's artists."""
     must = {compact(n) for p in m.hits for n in m.must_see_for(p)}
     liked = {compact(h.name) for hits in m.hits.values() for h in hits if h.level in ("must_see", "like")}
     if change.startswith("lineup:"):
         added = {compact(clean_artist(a)) for a in change.split(":", 1)[1].split(",")}
-        if added & must:
-            return "whatsapp"
-        return "digest" if added & liked else "ignore"
-    if change in ("new", "set_times"):
+        return "whatsapp" if added & liked else "ignore"
+    if change == "new":
+        return "whatsapp"
+    if change == "set_times":
         return "whatsapp" if must else "digest"
     return "digest"  # sold_out and anything else
 

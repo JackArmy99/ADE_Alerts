@@ -117,6 +117,20 @@ class Decision:
     recipients: list[str] = field(default_factory=list)
     kind: str = ""
     reason: str = ""
+    gold: bool = False  # pop-up with a must_see artist: the top category
+
+
+POPUP = re.compile(r"pop[\s-]?up|secret (?:location|venue|guest|set|show|party)|special guest|surprise (?:set|guest)|"
+                   r"location (?:tba|to be announced|revealed)", re.I)
+
+
+def is_gold(item: Item, cls: Classification, m: MatchResult, persons: set[str]) -> bool:
+    """Pop-up / secret show + a must_see artist (or a priority-urgent account) = gold standard."""
+    text = " ".join([item.text or "", cls.event_name or "", cls.reason or ""])
+    if not POPUP.search(text):
+        return False
+    return m.priority_urgent or any(m.must_see_for(p) for p in persons) or \
+        any(a for a in cls.artists if any(compact(a) == compact(n) for p in persons for n in m.must_see_for(p)))
 
 
 def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Decision:
@@ -145,13 +159,17 @@ def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Dec
     if actionable and cls.ticket_status != "on_sale" and (persons or m.account):
         urgent = True
 
+    gold = is_gold(item, cls, m, persons)
+    if gold:
+        urgent = True
+        why.insert(0, "GOLD: pop-up with a must-see artist")
     if urgent:
         if m.priority_urgent:
             recipients = known
         else:
             recipients = sorted(persons) or [ctx.settings.owner]
         kind = cls.ticket_status if cls.ticket_status != "unknown" else "urgent"
-        return Decision(True, "urgent", _ordered(recipients, known), kind, "; ".join(why) or cls.reason)
+        return Decision(True, "urgent", _ordered(recipients, known), kind, "; ".join(why) or cls.reason, gold=gold)
 
     if cls.urgency == "ignore" and used_claude and not persons:
         return Decision(False, reason=cls.reason or "ignored by classifier")

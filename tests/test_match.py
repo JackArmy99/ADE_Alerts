@@ -72,3 +72,24 @@ def test_claude_urgent_with_ticket_signal_still_urgent(ctx):
                          ticket_status="presale_signup", relevant_for=["jack"], model="claude")
     d = decide(item, cls, m.match(item.text, item.author), ctx)
     assert d.send and d.urgency == "urgent"
+
+
+def test_popup_with_must_see_is_gold(ctx):
+    from ade_radar.alerts import template_params
+    m = Matcher(ctx.taste, ctx.accounts)
+    item = Item("instagram", "g1", url="https://www.instagram.com/p/g1/", author="somebrand",
+                text="Secret location ADE pop-up with Josh Baker, Thu 22 Oct")
+    cls = Classification(is_ade_related=True, is_event_announcement=True, urgency="normal", date="2026-10-22",
+                         artists=["Josh Baker"], model="claude")
+    d = decide(item, cls, m.match(item.text, item.author), ctx)
+    assert d.send and d.gold and d.urgency == "urgent"
+    assert template_params(item, cls, d)[3].startswith("GOLD - POP-UP")
+
+
+def test_popup_with_only_like_artist_is_urgent_not_gold(ctx):
+    m = Matcher(ctx.taste, ctx.accounts)
+    item = Item("instagram", "g2", author="somebrand", text="ADE pop-up with Marsolo, Fri 23 Oct")
+    cls = Classification(is_ade_related=True, is_event_announcement=True, urgency="normal", date="2026-10-23",
+                         artists=["Marsolo"], model="claude")
+    d = decide(item, cls, m.match(item.text, item.author), ctx)
+    assert d.send and not d.gold and d.urgency == "urgent"  # "pop-up" is an urgent keyword

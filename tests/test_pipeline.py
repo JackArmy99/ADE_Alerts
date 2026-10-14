@@ -30,7 +30,7 @@ def test_fake_flyer_is_urgent_whatsapp_to_everyone(conn, ctx, fake_wa):
     params = fake_wa.sent[0][1]
     assert params[0].startswith("Social Pleasure ADE pop-up")
     assert params[1] == "Thu 22 Oct 23:00" and params[2] == "TBA"
-    assert params[3].startswith("URGENT: presale sign-up open")
+    assert params[3].startswith("GOLD - POP-UP: presale sign-up open")  # pop-up + must-see Paige Tomlinson
     assert params[3].endswith("https://www.instagram.com/socialpleasure/")  # "link in bio" -> profile
 
 

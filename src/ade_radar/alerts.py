@@ -73,7 +73,9 @@ def template_params(item: Item, cls: Classification, d: Decision, detail: str | 
         who = f"@{item.author}" if item.source.startswith("instagram") and item.author else ""
         if who and who.lower() not in p1.lower():
             detail += f" ({who})"
-    if d.urgency == "urgent":
+    if d.gold:
+        detail = "GOLD - POP-UP: " + detail
+    elif d.urgency == "urgent":
         detail = "URGENT: " + detail
     return [clean_param(p1), clean_param(pretty_when(cls.date, cls.time)), clean_param(cls.venue or "TBA"),
             detail_param(detail, best_link(item, cls))]
