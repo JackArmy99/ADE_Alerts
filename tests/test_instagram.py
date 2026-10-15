@@ -149,13 +149,17 @@ STORY_VIEWER = """<html><body>
   document.addEventListener('keydown', e => {
     if (e.key === 'ArrowRight' && !(KEYS_BLOCKED || document.activeElement.id === 'tray')) go(); });
   document.getElementById('next').addEventListener('click', go);
+  // The viewer address appears a moment after the tray click.
+  document.getElementById('tray').addEventListener('click', () =>
+    setTimeout(() => { if (!location.pathname.startsWith('/stories/')) history.pushState({}, '', frames[0]); }, 1500));
   document.getElementById('tray').focus();
 </script></body></html>"""
 
 
 @pytest.mark.skipif(not CHROMIUM.exists(), reason="no local chromium")
-@pytest.mark.parametrize("keys_blocked", [False, True])
-def test_stories_walks_every_frame(conn, tmp_path, monkeypatch, keys_blocked):
+@pytest.mark.parametrize("keys_blocked,start", [(False, "stories/kettama/1001/"), (True, "stories/kettama/1001/"),
+                                               (False, "")])
+def test_stories_walks_every_frame(conn, tmp_path, monkeypatch, keys_blocked, start):
     from playwright.sync_api import sync_playwright
     from ade_radar.sources import instagram
 
@@ -166,7 +170,7 @@ def test_stories_walks_every_frame(conn, tmp_path, monkeypatch, keys_blocked):
         b = p.chromium.launch(executable_path=str(CHROMIUM), headless=True)
         page = b.new_page()
         page.route("https://www.instagram.com/**", lambda r: r.fulfill(body=html, content_type="text/html"))
-        page.goto("https://www.instagram.com/stories/kettama/1001/")
+        page.goto("https://www.instagram.com/" + start)
         items = instagram.collect_stories(page, conn, tmp_path, counts)
         b.close()
     assert [i.external_id.split("/")[-2] for i in items] == ["1001", "1002", "2001"]

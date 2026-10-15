@@ -366,6 +366,16 @@ def _wait_url_change(page, url: str, seconds: float) -> bool:
     return False
 
 
+def _wait_story_url(page, seconds: float) -> bool:
+    """The viewer address can show up a moment after the click, and first as /stories/<user>/ without the id."""
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        if parse_story_url(page.url):
+            return True
+        time.sleep(0.3)
+    return False
+
+
 def advance_story(page, url: str) -> str:
     """Move to the next story frame. Returns how: 'auto', 'key', 'button' or '' when stuck.
     The tray button keeps keyboard focus after the click, so keys went to the tray instead of the viewer;
@@ -398,8 +408,10 @@ def collect_stories(page, conn, shots: Path, counts: dict) -> list[Item]:
         log.info("instagram: no stories in tray (or tray markup changed)")
         return []
     unseen = page.get_by_role("button", name=re.compile(r"Story by .*not seen", re.I))
-    target = unseen.first if unseen.count() else None
+    counts["story_unseen"] = unseen.count()
+    target = unseen.first if counts["story_unseen"] else None
     if target is None:
+        counts["story_stop"] = "no unseen stories"
         return []
     target.click(timeout=5000)
     human_pause(2, 3)
@@ -408,11 +420,22 @@ def collect_stories(page, conn, shots: Path, counts: dict) -> list[Item]:
             page.get_by_role("button", name=label).click(timeout=1500)
         except Exception:  # noqa: BLE001
             pass
+    if not _wait_story_url(page, 10):
+        # The viewer did not open (or uses another address): keep evidence for the next fix.
+        counts["story_stop"] = f"viewer did not open (url {page.url.split('?')[0][-60:]})"
+        log.warning("instagram stories: %s", counts["story_stop"])
+        try:
+            page.screenshot(path=str(shots / "story_open_failed.jpg"), type="jpeg", quality=70)
+        except Exception:  # noqa: BLE001
+            pass
+        return []
     items: list[Item] = []
     frames = 0
     stop = "max frames"
     for _ in range(MAX_STORY_FRAMES):
         parsed = parse_story_url(page.url)
+        if not parsed and "/stories/" in page.url and _wait_story_url(page, 3):
+            parsed = parse_story_url(page.url)
         if not parsed:
             stop = "viewer closed (all stories watched)"
             break
