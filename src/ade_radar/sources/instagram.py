@@ -361,6 +361,39 @@ STORY_FRAME_JS = """
 """
 
 
+STORY_CARD_JS = """
+() => {
+  // The story being played is the biggest image/video on screen; the small cards beside it are previews of
+  // OTHER accounts' stories and must not end up in the screenshot or the text.
+  const area = el => { const r = el.getBoundingClientRect(); return r.width * r.height; };
+  const shown = el => { const r = el.getBoundingClientRect();
+    return r.width > 150 && r.height > 150 && r.bottom > 0 && r.top < innerHeight; };
+  const media = Array.from(document.querySelectorAll('video, img')).filter(shown).sort((a, b) => area(b) - area(a))[0];
+  if (!media) return null;
+  const m = media.getBoundingClientRect();
+  // Grow to the story card (header with the account name, stickers) but stop before it spans the previews.
+  let card = media;
+  for (let n = media.parentElement; n && n !== document.body; n = n.parentElement) {
+    const r = n.getBoundingClientRect();
+    if (r.width > m.width * 1.25 || r.height > m.height * 1.4) break;
+    card = n;
+  }
+  const r = card.getBoundingClientRect();
+  const x = Math.max(0, r.left), y = Math.max(0, r.top);
+  return {x, y, width: Math.min(innerWidth, r.right) - x, height: Math.min(innerHeight, r.bottom) - y,
+          text: card.innerText || ''};
+}
+"""
+
+
+def story_card(page) -> dict | None:
+    try:
+        card = page.evaluate(STORY_CARD_JS)
+    except Exception:  # noqa: BLE001
+        return None
+    return card if card and card.get("width", 0) > 100 and card.get("height", 0) > 100 else None
+
+
 def story_frame(page) -> tuple[str, str] | None:
     """(author, id) of the story frame on screen. Instagram used to put a frame id in the address
     (/stories/<user>/<id>/); since Oct 2026 it can show only /stories/<user>/, so the id is then built from the
@@ -486,12 +519,14 @@ def collect_stories(page, conn, shots: Path, counts: dict) -> list[Item]:
             time.sleep(0.8)  # let the frame render
             name = re.sub(r"[^\w.-]", "_", url.rstrip("/").rsplit("/", 1)[-1])[:40]
             path = shots / f"story_{author}_{name}.jpg"
-            page.screenshot(path=str(path), type="jpeg", quality=80)
-            text = ""
-            try:
-                text = page.locator("section").first.inner_text(timeout=1500)[:1500]
-            except Exception:  # noqa: BLE001
-                pass
+            card = story_card(page)
+            if card:
+                page.screenshot(path=str(path), type="jpeg", quality=80,
+                                clip={k: card[k] for k in ("x", "y", "width", "height")})
+                text = (card.get("text") or "")[:1500]
+            else:  # unknown layout: whole page, and say so in the text so Claude is careful
+                page.screenshot(path=str(path), type="jpeg", quality=80)
+                text = f"(story by @{author}; side cards on the screenshot are other accounts' stories)"
             mentions = sorted({h.lower() for h in MENTION.findall(text)} - {author})
             items.append(Item(source="instagram_story", external_id=url, url=f"https://www.instagram.com/{author}/",
                               author=author, text=clean_caption(text), screenshot_paths=[str(path)], tagged=mentions))

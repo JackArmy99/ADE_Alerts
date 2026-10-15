@@ -32,3 +32,24 @@ def test_everyone_gets_new_alerts_but_no_catch_up(conn, ctx, fake_wa):
     dispatch(conn, ctx, fake_wa, item, cls, Decision(True, "normal", ["jack", "friend1"], "announce"), 1, stats,
              False)
     assert len(fake_wa.sent) == 1 and stats.skipped == 2
+
+
+def test_story_link_goes_to_the_events_account_not_the_resharer():
+    from ade_radar.alerts import best_link, template_params
+    from ade_radar.match import Decision
+    from ade_radar.models import Classification, Item
+
+    story = Item("instagram_story", "s1", url="https://www.instagram.com/rossi.dj_/", author="rossi.dj_",
+                 text="@demachine ADE", tagged=["demachine"])
+    cls = Classification(event_name="De Machine op ADE", artists=["Benwal", "Jam & Jali van der Valk"],
+                         venue="De Machine")
+    assert best_link(story, cls) == "https://www.instagram.com/demachine/"  # matched from the mention
+    cls.event_account = "demachine.ams"  # Claude read the reshare header
+    assert best_link(story, cls) == "https://www.instagram.com/demachine.ams/"
+    assert "@demachine.ams via @rossi.dj_" in template_params(story, cls, Decision(True, "normal"))[3]
+    # the poster's own event keeps the poster
+    own = Item("instagram_story", "s2", author="benwal", text="")
+    assert best_link(own, Classification(event_name="Benwal ADE")) == "https://www.instagram.com/benwal/"
+    # a ticket link always wins
+    cls.links = ["https://dice.fm/event/abc"]
+    assert best_link(story, cls) == "https://dice.fm/event/abc"

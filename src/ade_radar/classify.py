@@ -50,6 +50,10 @@ Return ONLY one JSON object with these fields:
 - relevant_for: names of the people (keys under `people` in the taste file) whose must_see, like or
   brands_like lists (or clearly matching genres) fit this event. Use only names from the taste file.
 - reason: one short sentence.
+- event_account: Instagram handle (no @) of the account that runs THIS event: the promoter, brand, venue or
+  headliner, as shown in the item (a reshared post's header, an @mention, the flyer). The poster is often
+  someone else (a DJ resharing a club's story): only give the poster's handle when it is their own event.
+  null when no handle for the event is visible.
 
 Accounts listed as priority urgent (any ADE-related post from them is urgent):
 {priority_accounts}
@@ -74,9 +78,11 @@ SCHEMA = {
         "urgency": {"type": "string", "enum": ["urgent", "normal", "ignore"]},
         "relevant_for": {"type": "array", "items": {"type": "string"}},
         "reason": {"type": "string"},
+        "event_account": {"anyOf": [{"type": "string"}, {"type": "null"}]},
     },
     "required": ["is_ade_related", "is_event_announcement", "event_name", "artists", "date", "time", "venue",
-                 "ticket_status", "links", "urgency", "relevant_for", "reason"],
+                 "ticket_status", "links", "urgency", "relevant_for", "reason",
+                 "event_account"],
     "additionalProperties": False,
 }
 

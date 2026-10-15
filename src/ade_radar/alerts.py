@@ -38,14 +38,37 @@ def reason_hash(event_id: int | str, kind: str) -> str:
     return hashlib.sha1(f"{event_id}|{kind}".encode()).hexdigest()[:12]
 
 
+HANDLE = re.compile(r"^[a-z0-9._]{1,30}$")
+
+
+def event_account(item: Item, cls: Classification) -> str:
+    """Instagram account behind the event: Claude's answer, else the poster or a mentioned account whose name
+    matches the event / venue / artists, else the poster. (A DJ resharing a club's story is not the event.)"""
+    if cls.event_account and HANDLE.match(cls.event_account):
+        return cls.event_account
+    names = [compact(n) for n in [cls.event_name or "", cls.venue or "", *cls.artists] if len(compact(n)) >= 4]
+
+    def related(h: str) -> bool:
+        hc = compact(h)
+        return len(hc) >= 4 and any(hc in n or n in hc for n in names)
+
+    author = (item.author or "").lower()
+    if author and related(author):
+        return author
+    for h in item.tagged:
+        if related(h):
+            return h.lower()
+    return author
+
+
 def best_link(item: Item, cls: Classification) -> str:
     links = [u for u in [*cls.links, *item.links] if u.startswith("http") and "cdninstagram" not in u
              and "fbcdn" not in u and "unsubscribe" not in u.lower()]
     for u in links:
         if any(h in u.lower() for h in TICKET_HOSTS):
             return u
-    profile = f"https://www.instagram.com/{item.author}/" if item.source.startswith("instagram") and item.author \
-        else ""
+    account = event_account(item, cls) if item.source.startswith("instagram") else ""
+    profile = f"https://www.instagram.com/{account}/" if account else ""
     if profile and re.search(r"link\s*in\s*(?:our\s*)?bio", item.text or "", re.I):
         return profile
     if item.source == "instagram_story" and profile:
@@ -73,7 +96,10 @@ def template_params(item: Item, cls: Classification, d: Decision, detail: str | 
         p1 = f"{emoji} {p1}"
     if detail is None:
         detail = STATUS_TEXT.get(cls.ticket_status, "new announcement")
-        who = f"@{item.author}" if item.source.startswith("instagram") and item.author else ""
+        who = ""
+        if item.source.startswith("instagram") and item.author:
+            account = event_account(item, cls)
+            who = f"@{account}" if account == item.author.lower() else f"@{account} via @{item.author}"
         if who and who.lower() not in p1.lower():
             detail += f" ({who})"
     if d.gold:

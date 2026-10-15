@@ -57,6 +57,7 @@ class Classification:
     relevant_for: list[str] = field(default_factory=list)
     reason: str = ""
     model: str = "rules"
+    event_account: str | None = None  # Instagram handle of whoever runs the event (may differ from the poster)
 
     @classmethod
     def from_dict(cls, d: dict, model: str = "rules") -> "Classification":
@@ -82,6 +83,7 @@ class Classification:
             relevant_for=[str(p).lower() for p in d.get("relevant_for") or []],
             reason=str(d.get("reason") or ""),
             model=model,
+            event_account=(s(d.get("event_account")) or "").lstrip("@").lower() or None,
         )
 
     def to_json(self) -> str:

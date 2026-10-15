@@ -138,7 +138,10 @@ def test_collect_feed_on_fixture_skips_old_posts(conn, tmp_path, monkeypatch):
 
 STORY_VIEWER = """<html><body>
 <button aria-label="Story by kettama, not seen" id="tray">kettama</button>
-<section><div id="frame"><img width="300" height="500" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="><time id="t" datetime="">2h</time></div>
+<div id="side" style="display:inline-block;vertical-align:top"><img width="160" height="280"
+  src="data:image/gif;base64,R0lGODlhAQABAAAAACw="><div>@benwal</div></div>
+<section style="display:inline-block"><div id="frame" style="display:inline-block"><time id="t" datetime="">2h</time>
+<img width="300" height="500" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="><div>@ownmention</div></div>
 <div role="button" id="next"><svg aria-label="Next" width="20" height="20"></svg></div></section>
 <script>
   const IDS = USE_IDS;
@@ -186,3 +189,6 @@ def test_stories_walks_every_frame(conn, tmp_path, monkeypatch, keys_blocked, st
     else:
         assert items[0].external_id == "https://www.instagram.com/stories/kettama/#2026-10-15T08:00:00.000Z"
     assert counts["story_stop"].startswith("viewer closed")
+    # the preview card of another account beside the story is not part of it
+    assert all("benwal" not in i.tagged and "ownmention" in i.tagged for i in items)
+    assert all(Path(i.screenshot_paths[0]).exists() for i in items)
