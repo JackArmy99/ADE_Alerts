@@ -29,8 +29,11 @@ Return ONLY one JSON object with these fields:
 - is_ade_related: true if the item is about an event in Amsterdam (or nearby, e.g. Halfweg) during
   21-25 Oct 2026 / ADE week. Past events, other cities and other dates are false. A venue or brand we like
   announcing its programme for another month or season (e.g. March, New Year, 2027) is false.
-- is_event_announcement: true if it announces or updates a specific event (lineup, tickets, sign-up, set times,
+- is_event_announcement: true if it announces or updates a specific event (lineup, tickets, sign-up,
   sold out, extra date). Recaps, memes and generic promo are false.
+- Timetables / set times / running orders / stage times for an event are NOT alert worthy: urgency "ignore",
+  and start reason with "timetable". Exception: the same item also opens a presale, sign-up, waitlist,
+  extra date or resale.
 - event_name, artists (lineup names without country codes), date (YYYY-MM-DD), time (HH:MM, start), venue:
   null / [] when unknown. Never guess a date or venue that is not shown.
 - ticket_status: presale_signup | on_sale | sold_out | waitlist | second_date | resale | unknown

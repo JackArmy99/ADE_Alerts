@@ -169,6 +169,18 @@ def outside_ade_week(item: Item, cls: Classification, taste: Taste) -> str:
     return ""
 
 
+TIMETABLE = re.compile(r"\b(?:time\s*-?\s*tables?|set\s*-?\s*times?|running\s+orders?|stage\s+times?|"
+                       r"set\s+schedule|tijdschema|blokkenschema)\b", re.I)
+NEW_CHANCE = ("presale_signup", "waitlist", "second_date", "resale")
+
+
+def is_timetable(item: Item, cls: Classification) -> bool:
+    """Timetable / set-times posts are not alert worthy, unless they also open a new way to get tickets."""
+    if cls.ticket_status in NEW_CHANCE:
+        return False
+    return bool(TIMETABLE.search(" ".join([item.text or "", cls.event_name or "", cls.reason or ""])))
+
+
 def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Decision:
     known = list(ctx.settings.recipients) or list(ctx.taste.people)
     used_claude = cls.model != "rules"
@@ -180,6 +192,8 @@ def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Dec
     outside = outside_ade_week(item, cls, ctx.taste)
     if outside:
         return Decision(False, reason=outside)
+    if is_timetable(item, cls):
+        return Decision(False, reason="timetable / set times (not alert worthy)")
 
     persons = ({p for p in cls.relevant_for if p in known} | m.persons) & set(known)
     # People sharing one taste block (mc: *jack, or recipients without their own block) get the same alerts,

@@ -152,3 +152,18 @@ def test_recipients_without_taste_share_the_owners(ctx):
                          urgency="urgent", relevant_for=["jack"], model="claude")
     d = decide(item, cls, Matcher(ctx.taste, ctx.accounts).match("flyer", "someone"), ctx)
     assert d.send and d.recipients == ["jack", "sam"]
+
+
+def test_timetables_are_not_alerts(ctx):
+    from ade_radar.match import Matcher, decide
+    from ade_radar.models import Classification, Item
+
+    m = Matcher(ctx.taste, ctx.accounts)
+    item = Item("instagram", "t1", author="dgtlfestival", text="ADE timetable is here! Paige Tomlinson 16:00")
+    cls = Classification(is_ade_related=True, is_event_announcement=True, event_name="DGTL Opening Day",
+                         artists=["Paige Tomlinson"], date="2026-10-22", venue="NDSM", urgency="normal",
+                         ticket_status="on_sale", relevant_for=["jack"], model="claude")
+    assert not decide(item, cls, m.match(item.text, item.author), ctx).send
+    # ...unless it also opens a new way in
+    cls.ticket_status = "waitlist"
+    assert decide(item, cls, m.match(item.text, item.author), ctx).send

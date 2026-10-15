@@ -101,7 +101,7 @@ def test_run_baseline_then_lineup_change(conn, ctx, fake_wa, monkeypatch):
     new_msgs = [p for _, p in fake_wa.sent[n_baseline:]]
     details = [p[3] for p in new_msgs]
     assert any("lineup added: Paige Tomlinson" in d for d in details)
-    assert any(d.startswith("set times:") and "Paige Tomlinson 16:00-17:30" in d for d in details)
+    assert not any(d.startswith("set times:") for d in details)  # timetables are not alert worthy
     assert all(p[2] == "NDSM Docklands" and p[1].startswith("Thu 22 Oct") for p in new_msgs)
 
     stats3 = AlertStats()
@@ -153,8 +153,8 @@ def test_ade_route(ctx):
     assert ade.ade_route("lineup:Marsolo", like, ctx) == "whatsapp"
     assert ade.ade_route("lineup:Random DJ", like, ctx) == "ignore"
     assert ade.ade_route("sold_out", must, ctx) == "digest"
-    assert ade.ade_route("set_times", must, ctx) == "whatsapp"
-    assert ade.ade_route("set_times", like, ctx) == "digest"
+    assert ade.ade_route("set_times", must, ctx) == "ignore"
+    assert ade.ade_route("set_times", like, ctx) == "ignore"
 
 
 def test_must_see_found_when_listed_event_is_read_in_detail_later(conn, ctx, fake_wa, monkeypatch):
