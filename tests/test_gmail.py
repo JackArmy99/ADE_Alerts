@@ -31,3 +31,10 @@ def test_presale_password_mail_is_not_treated_as_security():
     from ade_radar.sources.gmail import is_security_mail
     assert not is_security_mail(Item("gmail", "5", author="Loveland <info@loveland.nl>",
                                      raw={"subject": "Your ADE presale password is here"}))
+
+
+def test_app_password_spaces_are_ignored(tmp_path, monkeypatch):
+    from ade_radar.config import load_settings
+    (tmp_path / ".env").write_text("GMAIL_APP_PASSWORD=abcd efgh ijkl mnop\n", encoding="utf-8")
+    monkeypatch.delenv("GMAIL_APP_PASSWORD", raising=False)
+    assert load_settings(tmp_path).gmail_app_password == "abcdefghijklmnop"

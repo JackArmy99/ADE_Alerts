@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -109,7 +110,7 @@ def load_settings(root: Path | None = None) -> Settings:
         wa_body_params=int(e("WHATSAPP_TEMPLATE_PARAMS") or 4),
         recipients=recipients,
         gmail_address=e("GMAIL_ADDRESS", ""),
-        gmail_app_password=(e("GMAIL_APP_PASSWORD") or "").replace(" ", ""),
+        gmail_app_password=re.sub(r"\s", "", e("GMAIL_APP_PASSWORD") or ""),  # Google shows it in groups of 4
         gmail_label=e("GMAIL_LABEL") or "ADE",
         ntfy_topic=e("NTFY_TOPIC", ""),
         ig_profile_dir=ig_dir if ig_dir.is_absolute() else root / ig_dir,
