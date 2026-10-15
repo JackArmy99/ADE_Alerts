@@ -25,6 +25,7 @@ MAX_POSTS = 40
 FIRST_RUN_MAX_POSTS = 20
 FIRST_RUN_MAX_AGE_HOURS = 72
 MAX_STORY_FRAMES = 40
+MAX_STORY_SECONDS = 6 * 60  # leave room within the 15-minute task limit
 STOP_AFTER_SEEN = 3
 STOP_AFTER_OLD = 3  # consecutive posts older than the age limit (chronological feed only)
 MAX_SCROLLS = 30
@@ -512,7 +513,11 @@ def collect_stories(page, conn, shots: Path, counts: dict) -> list[Item]:
     items: list[Item] = []
     frames = 0
     stop = "max frames"
+    deadline = time.monotonic() + MAX_STORY_SECONDS
     for _ in range(MAX_STORY_FRAMES):
+        if time.monotonic() > deadline:
+            stop = "time limit (rest next run)"
+            break
         author, url = frame
         frames += 1
         if not db.ig_is_seen(conn, url) and all(i.external_id != url for i in items):

@@ -25,6 +25,12 @@ WALL_TEXT = [
 ]
 
 
+# With the screen off or locked, Windows reports the Chrome window as hidden and Chrome stops painting it, so
+# screenshots hang until they time out and the run is killed. These keep Chrome rendering in the background.
+KEEP_RENDERING = ["--disable-features=CalculateNativeWinOcclusion", "--disable-backgrounding-occluded-windows",
+                  "--disable-renderer-backgrounding", "--disable-background-timer-throttling"]
+
+
 @contextmanager
 def chrome(s: Settings, headless: bool = False, fit_window: bool = False):
     """fit_window: page follows the window size (manual login on small/scaled screens); otherwise a fixed
@@ -38,10 +44,12 @@ def chrome(s: Settings, headless: bool = False, fit_window: bool = False):
                 str(s.ig_profile_dir), channel="chrome", headless=headless,
                 viewport=None if fit_window else {"width": 1280, "height": 900}, no_viewport=fit_window,
                 locale="en-GB", timezone_id="Europe/Amsterdam",
-                args=["--disable-blink-features=AutomationControlled"] + (["--start-maximized"] if fit_window else []),
+                args=["--disable-blink-features=AutomationControlled", *KEEP_RENDERING]
+                + (["--start-maximized"] if fit_window else []),
             )
         except Exception as e:  # noqa: BLE001
             raise RuntimeError(f"could not start installed Chrome (is Google Chrome installed?): {e}") from e
+        ctx.set_default_timeout(20_000)  # fail fast instead of hanging until the 15-minute task limit
         try:
             yield ctx
         finally:

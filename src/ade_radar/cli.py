@@ -157,6 +157,11 @@ def status(ctx) -> int:
             print(f"{src:10} {r['started']}  ok={r['ok']}  {(r['error'] or '')[:80]}  {r['counts']}")
         if not rows:
             print(f"{src:10} never ran")
+        cut = rows[0]["started"] if rows else ""
+        hung = conn.execute("SELECT started FROM runs WHERE source=? AND finished IS NULL AND started>?"
+                            " ORDER BY id DESC LIMIT 5", (src, cut)).fetchall()
+        for r in hung:
+            print(f"{src:10} {r['started']}  NOT FINISHED (still running, or stopped by the 15-min task limit)")
     n = conn.execute("SELECT status, COUNT(*) c FROM alerts GROUP BY status").fetchall()
     print("alerts: " + ", ".join(f"{r['status']}={r['c']}" for r in n))
     conn.close()
