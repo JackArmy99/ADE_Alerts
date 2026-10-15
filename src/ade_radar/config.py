@@ -187,4 +187,16 @@ class Context:
 @lru_cache(maxsize=1)
 def load_context() -> Context:
     s = load_settings()
-    return Context(settings=s, taste=load_taste(s.root), accounts=load_accounts(s.root))
+    taste = load_taste(s.root)
+    share_owner_taste(taste, s)
+    return Context(settings=s, taste=taste, accounts=load_accounts(s.root))
+
+
+def share_owner_taste(taste: Taste, s: Settings) -> None:
+    """Recipients in .env without their own block in taste.yaml get the owner's (Jack's) taste.
+    The same dict object is shared, so routing treats them exactly like the owner."""
+    base = taste.people.get(s.owner) or next(iter(taste.people.values()), None)
+    if base is None:
+        return
+    for name in s.recipients:
+        taste.people.setdefault(name, base)

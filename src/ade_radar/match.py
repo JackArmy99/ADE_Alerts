@@ -182,6 +182,10 @@ def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Dec
         return Decision(False, reason=outside)
 
     persons = ({p for p in cls.relevant_for if p in known} | m.persons) & set(known)
+    # People sharing one taste block (mc: *jack, or recipients without their own block) get the same alerts,
+    # even when Claude only named one of them.
+    shared = [ctx.taste.people[p] for p in persons if p in ctx.taste.people]
+    persons |= {p for p in known if any(ctx.taste.people.get(p) is t for t in shared)}
     why = []
     # Claude's "urgent" only counts with something to act on: a ticket signal, an urgent keyword, a priority
     # account, or a reveal for a must_see artist. "Playing ADE" on its own is not urgent.

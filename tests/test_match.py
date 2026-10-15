@@ -135,3 +135,20 @@ def test_events_outside_ade_week_never_alert(ctx):
     # "ADE 2026 on 22 Oct, tickets from 1 March" style text still passes (October / ADE mentioned)
     item3 = Item("instagram", "v3", author="x", text="ADE pop-up 22 Oct with Josh Baker, presale since 1 March")
     assert decide(item3, nodate, m.match(item3.text, item3.author), ctx).send
+
+
+def test_recipients_without_taste_share_the_owners(ctx):
+    from ade_radar.config import share_owner_taste
+    from ade_radar.match import Matcher, decide
+    from ade_radar.models import Classification, Item
+
+    ctx.settings.recipients["sam"] = "31600000003"
+    share_owner_taste(ctx.taste, ctx.settings)
+    assert ctx.taste.people["sam"] is ctx.taste.people["jack"]
+    assert ctx.taste.people["friend1"] is not ctx.taste.people["jack"]  # an own block is kept
+    item = Item("instagram", "p1", author="someone", text="flyer")
+    cls = Classification(is_ade_related=True, is_event_announcement=True, event_name="Pop-up",
+                         artists=["Paige Tomlinson"], date="2026-10-22", venue="Somewhere",
+                         urgency="urgent", relevant_for=["jack"], model="claude")
+    d = decide(item, cls, Matcher(ctx.taste, ctx.accounts).match("flyer", "someone"), ctx)
+    assert d.send and d.recipients == ["jack", "sam"]
