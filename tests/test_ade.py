@@ -185,3 +185,17 @@ def test_wrong_ics_date_is_replaced_by_page_date():
     assert ade.sanitize_date(keep) == keep
     assert ade.date_from_text("Thursday 22 October, NDSM") == "2026-10-22"
     assert ade.date_from_text("25.10.2026 Gashouder") == "2026-10-25"
+
+
+ICS_WITH_TIMEZONE = (
+    "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Amsterdam\r\nBEGIN:DAYLIGHT\r\n"
+    "DTSTART:20260329T010000\r\nTZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nBEGIN:STANDARD\r\n"
+    "DTSTART:20261025T010000\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\n"
+    "BEGIN:VEVENT\r\nSUMMARY:Verknipt ADE Special Saturday\r\nDTSTART;TZID=Europe/Amsterdam:20261024T200000\r\n"
+    "LOCATION:AFAS Live\\, Amsterdam\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n")
+
+
+def test_ics_ignores_timezone_block_dates():
+    """Live bug 15 Oct: alerts said 'Sun 29 Mar 01:00' (the DST switch in VTIMEZONE) instead of the event date."""
+    ics = ade.parse_ics(ICS_WITH_TIMEZONE)
+    assert ics["date"] == "2026-10-24" and ics["time"] == "20:00" and ics["venue"] == "AFAS Live"

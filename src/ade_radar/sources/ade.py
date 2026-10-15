@@ -130,9 +130,17 @@ def parse_ics(text: str) -> dict:
     """DTSTART / LOCATION / SUMMARY from the per-event calendar file."""
     unfolded = re.sub(r"\r?\n[ \t]", "", text)
     out: dict = {}
+    in_event = False
     for line in unfolded.splitlines():
         key, _, value = line.partition(":")
         base = key.split(";")[0].upper()
+        # Only the VEVENT counts: the VTIMEZONE block before it has its own DTSTART (the daylight-saving switch,
+        # e.g. 29 March 01:00), which ended up as the event date.
+        if base in ("BEGIN", "END") and value.strip().upper() == "VEVENT":
+            in_event = base == "BEGIN"
+            continue
+        if not in_event:
+            continue
         value = value.replace("\\,", ",").replace("\\n", " ").replace("\\;", ";").strip()
         if base == "DTSTART" and "date" not in out:
             out["date"], out["time"] = _ics_datetime(key, value)
