@@ -93,7 +93,37 @@ def parse_event_html(html: str) -> dict:
                 set_times[name] = f"{int(t.group(1)):02d}:{t.group(2)}-{int(t.group(3)):02d}:{t.group(4)}"
                 break
     main_text = "\n".join(lines[:400])
-    return {"title": title, "lineup": lineup, "sold_out": bool(SOLD_OUT.search(main_text)), "set_times": set_times}
+    return {"title": title, "lineup": lineup, "sold_out": bool(SOLD_OUT.search(main_text)), "set_times": set_times,
+            "page_date": date_from_text(main_text)}
+
+
+_OCT_DATE = [re.compile(r"\b(2[0-6])(?:st|nd|rd|th)?\s*(?:oct|okt)(?:ober)?\b", re.I),
+             re.compile(r"\b(?:oct|okt)(?:ober)?\s*(2[0-6])\b", re.I),
+             re.compile(r"\b(2[0-6])[./-]10(?:[./-](?:20)?26)?\b")]
+
+
+def date_from_text(text: str) -> str | None:
+    """'Thursday 22 October' / '22 okt' / 'Oct 22' / '22.10' -> '2026-10-22' (ADE week only)."""
+    for rx in _OCT_DATE:
+        m = rx.search(text or "")
+        if m:
+            return f"2026-10-{int(m.group(1)):02d}"
+    return None
+
+
+def sanitize_date(ev: dict, start: str = "2026-10-21", end: str = "2026-10-26") -> dict:
+    """Every event on the ADE programme is in ADE week. A date outside it (the .ics file sometimes carries
+    another date) is replaced by one read from the page or card text, or dropped (alert says TBA)."""
+    d = ev.get("date")
+    if d and start <= d[:10] <= end:
+        return ev
+    out = dict(ev)
+    found = ev.get("page_date") or date_from_text(ev.get("card_text", "")) or date_from_text(ev.get("title", ""))
+    if d:
+        log.info("ADE %s: date %s is outside ADE week, using %s", ev.get("ade_id"), d, found or "TBA")
+    out["date"] = found
+    out["time"] = None if not found or found != d else ev.get("time")
+    return out
 
 
 def parse_ics(text: str) -> dict:
@@ -413,6 +443,7 @@ def fetch_details(f: Fetcher, ev: dict) -> dict:
         out["lineup"] = page["lineup"] or ev.get("lineup", [])
         out["sold_out"] = page["sold_out"] or ev.get("sold_out", False)
         out["set_times"] = page["set_times"]
+        out["page_date"] = page.get("page_date")
     try:
         ics = parse_ics(f.get(f"{BASE}/en/events/calendar/{ev['ade_id']}.ics").text)
         for k in ("date", "time", "venue"):
@@ -468,6 +499,7 @@ def _run(ctx: Context, conn, counts: dict, f, *, wa, stats: AlertStats, dry_run:
             except requests.RequestException as e:
                 log.warning("ADE event %s fetch failed: %s", ev["ade_id"], e)
             m = _persons(matcher, merged)
+        merged = sanitize_date(merged)
         changes = diff(old, merged) if (old is None or old.get("fetched_at")) else []
         # A listed event read in detail for the first time (the first run only reads 100 of ~1,400): its lineup is
         # new to us. Treat it like the starting point: report it only for must-see artists.

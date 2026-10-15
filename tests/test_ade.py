@@ -173,3 +173,15 @@ def test_must_see_found_when_listed_event_is_read_in_detail_later(conn, ctx, fak
     titles = [p[0] for _, p in fake_wa.sent]
     assert sum(t.startswith("Night Two") for t in titles) == 1  # Kyle Starkey (must-see): reported exactly once
     assert not any(t.startswith("Night One") for t in titles)
+
+
+def test_wrong_ics_date_is_replaced_by_page_date():
+    ev = {"ade_id": "1", "date": "2026-03-10", "time": "12:00", "page_date": "2026-10-23"}
+    out = ade.sanitize_date(ev)
+    assert out["date"] == "2026-10-23" and out["time"] is None
+    assert ade.sanitize_date({"ade_id": "2", "date": "2026-03-10", "card_text": "Sat 24 Oct · Pllek"})["date"] == "2026-10-24"
+    assert ade.sanitize_date({"ade_id": "3", "date": "2026-03-10"})["date"] is None  # unknown -> TBA, never March
+    keep = {"ade_id": "4", "date": "2026-10-22", "time": "23:00"}
+    assert ade.sanitize_date(keep) == keep
+    assert ade.date_from_text("Thursday 22 October, NDSM") == "2026-10-22"
+    assert ade.date_from_text("25.10.2026 Gashouder") == "2026-10-25"
