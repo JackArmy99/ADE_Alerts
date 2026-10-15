@@ -343,6 +343,53 @@ def _capture_post(page, art, post: dict, shots: Path) -> Item:
                 raw={"collaborators": post["collaborators"], "location": post["location"]})
 
 
+def _story_next_button(page):
+    """The viewer's own 'Next' arrow (svg aria-label='Next' inside a clickable element), if visible."""
+    for loc in (page.get_by_role("button", name=re.compile(r"^Next$", re.I)),
+                page.locator('svg[aria-label="Next"]')):
+        try:
+            for i in range(loc.count()):
+                el = loc.nth(i)
+                if el.is_visible():
+                    return el
+        except Exception:  # noqa: BLE001
+            pass
+    return None
+
+
+def _wait_url_change(page, url: str, seconds: float) -> bool:
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        if page.url.rstrip("/") != url.rstrip("/"):
+            return True
+        time.sleep(0.2)
+    return False
+
+
+def advance_story(page, url: str) -> str:
+    """Move to the next story frame. Returns how: 'auto', 'key', 'button' or '' when stuck.
+    The tray button keeps keyboard focus after the click, so keys went to the tray instead of the viewer;
+    focus is dropped first. The Space key is not used at all (it 'clicks' whatever button has focus)."""
+    if page.url.rstrip("/") != url.rstrip("/"):
+        return "auto"  # the story advanced by itself while we were capturing
+    try:
+        page.evaluate("() => { if (document.activeElement) document.activeElement.blur(); }")
+    except Exception:  # noqa: BLE001
+        pass
+    page.keyboard.press("ArrowRight")
+    if _wait_url_change(page, url, 3):
+        return "key"
+    btn = _story_next_button(page)
+    if btn is not None:
+        try:
+            btn.click(timeout=2000)
+            if _wait_url_change(page, url, 3):
+                return "button"
+        except Exception:  # noqa: BLE001
+            pass
+    return ""
+
+
 def collect_stories(page, conn, shots: Path, counts: dict) -> list[Item]:
     tray = page.get_by_role("button", name=re.compile(r"^Story by", re.I))
     n = tray.count()
@@ -362,40 +409,40 @@ def collect_stories(page, conn, shots: Path, counts: dict) -> list[Item]:
         except Exception:  # noqa: BLE001
             pass
     items: list[Item] = []
-    last_url = ""
-    repeats = 0
+    frames = 0
+    stop = "max frames"
     for _ in range(MAX_STORY_FRAMES):
         parsed = parse_story_url(page.url)
         if not parsed:
+            stop = "viewer closed (all stories watched)"
             break
         author, url = parsed
-        if url == last_url:
-            repeats += 1
-            if repeats >= 3:
-                break
-        else:
-            repeats = 0
-            last_url = url
-            if not db.ig_is_seen(conn, url) and all(i.external_id != url for i in items):
-                try:
-                    page.keyboard.press("Space")  # pause playback while capturing
-                except Exception:  # noqa: BLE001
-                    pass
-                time.sleep(0.8)
-                path = shots / f"story_{author}_{url.rstrip('/').split('/')[-1]}.jpg"
-                page.screenshot(path=str(path), type="jpeg", quality=80)
-                text = ""
-                try:
-                    text = page.locator("section").first.inner_text(timeout=1500)[:1500]
-                except Exception:  # noqa: BLE001
-                    pass
-                mentions = sorted({h.lower() for h in MENTION.findall(text)} - {author})
-                items.append(Item(source="instagram_story", external_id=url, url=url, author=author,
-                                  text=clean_caption(text), screenshot_paths=[str(path)], tagged=mentions))
+        frames += 1
+        if not db.ig_is_seen(conn, url) and all(i.external_id != url for i in items):
+            time.sleep(0.8)  # let the frame render
+            path = shots / f"story_{author}_{url.rstrip('/').split('/')[-1]}.jpg"
+            page.screenshot(path=str(path), type="jpeg", quality=80)
+            text = ""
+            try:
+                text = page.locator("section").first.inner_text(timeout=1500)[:1500]
+            except Exception:  # noqa: BLE001
+                pass
+            mentions = sorted({h.lower() for h in MENTION.findall(text)} - {author})
+            items.append(Item(source="instagram_story", external_id=url, url=url, author=author,
+                              text=clean_caption(text), screenshot_paths=[str(path)], tagged=mentions))
         if (reason := check_wall(page)):
             raise SourceBlocked(f"Instagram {reason}")
-        page.keyboard.press("ArrowRight")
-        human_pause(1.0, 2.2)
+        if not advance_story(page, url):
+            stop = "stuck (could not move to the next story)"
+            try:
+                page.screenshot(path=str(shots / "story_stuck.jpg"), type="jpeg", quality=70)
+            except Exception:  # noqa: BLE001
+                pass
+            break
+        human_pause(0.6, 1.4)
+    counts["story_frames"] = frames
+    counts["story_stop"] = stop
+    log.info("instagram stories: %d frames viewed, %d new, stopped: %s", frames, len(items), stop)
     try:
         page.keyboard.press("Escape")
     except Exception:  # noqa: BLE001

@@ -134,3 +134,41 @@ def test_collect_feed_on_fixture_skips_old_posts(conn, tmp_path, monkeypatch):
     assert items[0].author == "socialpleasure" and items[0].screenshot_paths
     assert "Tickets: dice.fm/ade" in items[0].text  # caption "more" expanded, same post kept
     assert counts["posts_checked"] == 2 and counts["posts_too_old"] == 1
+
+
+STORY_VIEWER = """<html><body>
+<button aria-label="Story by kettama, not seen" id="tray">kettama</button>
+<section><div id="frame">frame</div>
+<div role="button" id="next"><svg aria-label="Next" width="20" height="20"></svg></div></section>
+<script>
+  const frames = ['/stories/kettama/1001/', '/stories/kettama/1002/', '/stories/socialpleasure/2001/'];
+  let i = 0;
+  const go = () => { i++; if (i < frames.length) { history.pushState({}, '', frames[i]); }
+                     else { history.pushState({}, '', '/'); } };
+  // Like Instagram: arrow keys only work when focus is not on a tray button (the tray swallows them).
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' && !(KEYS_BLOCKED || document.activeElement.id === 'tray')) go(); });
+  document.getElementById('next').addEventListener('click', go);
+  document.getElementById('tray').focus();
+</script></body></html>"""
+
+
+@pytest.mark.skipif(not CHROMIUM.exists(), reason="no local chromium")
+@pytest.mark.parametrize("keys_blocked", [False, True])
+def test_stories_walks_every_frame(conn, tmp_path, monkeypatch, keys_blocked):
+    from playwright.sync_api import sync_playwright
+    from ade_radar.sources import instagram
+
+    monkeypatch.setattr(instagram, "human_pause", lambda *a, **k: None)
+    html = STORY_VIEWER.replace("KEYS_BLOCKED", "true" if keys_blocked else "false")
+    counts: dict = {}
+    with sync_playwright() as p:
+        b = p.chromium.launch(executable_path=str(CHROMIUM), headless=True)
+        page = b.new_page()
+        page.route("https://www.instagram.com/**", lambda r: r.fulfill(body=html, content_type="text/html"))
+        page.goto("https://www.instagram.com/stories/kettama/1001/")
+        items = instagram.collect_stories(page, conn, tmp_path, counts)
+        b.close()
+    assert [i.external_id.split("/")[-2] for i in items] == ["1001", "1002", "2001"]
+    assert items[-1].author == "socialpleasure"
+    assert counts["story_stop"].startswith("viewer closed")
