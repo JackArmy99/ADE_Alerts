@@ -155,3 +155,21 @@ def test_ade_route(ctx):
     assert ade.ade_route("sold_out", must, ctx) == "digest"
     assert ade.ade_route("set_times", must, ctx) == "whatsapp"
     assert ade.ade_route("set_times", like, ctx) == "digest"
+
+
+def test_must_see_found_when_listed_event_is_read_in_detail_later(conn, ctx, fake_wa, monkeypatch):
+    """First run reads only some events in detail; a must-see in a later-read lineup is still reported once."""
+    listing = ('<ul><li><a href="/en/program/2026/night-one/2009001/"><h3>Night One</h3></a></li>'
+               '<li><a href="/en/program/2026/night-two/2009002/"><h3>Night Two</h3></a></li></ul>')
+    pages = {"program/filter": listing, "page=2": "<html></html>",
+             "night-one/2009001": "<h1>Night One</h1><p>Nobody (DE)</p>",
+             "night-two/2009002": "<h1>Night Two</h1><p>Kyle Starkey (GB)</p><p>Someone (NL)</p>"}
+    fetcher = FakeFetcher(pages)
+    monkeypatch.setattr(ade, "Fetcher", lambda: fetcher)
+    monkeypatch.setattr(ade, "MAX_DETAIL_FETCHES", 1)  # first run only reads one event in detail
+    ade.run(ctx, conn, {}, wa=fake_wa, stats=AlertStats(), dry_run=False)
+    ade.run(ctx, conn, {}, wa=fake_wa, stats=AlertStats(), dry_run=False)
+    ade.run(ctx, conn, {}, wa=fake_wa, stats=AlertStats(), dry_run=False)
+    titles = [p[0] for _, p in fake_wa.sent]
+    assert sum(t.startswith("Night Two") for t in titles) == 1  # Kyle Starkey (must-see): reported exactly once
+    assert not any(t.startswith("Night One") for t in titles)

@@ -469,6 +469,11 @@ def _run(ctx: Context, conn, counts: dict, f, *, wa, stats: AlertStats, dry_run:
                 log.warning("ADE event %s fetch failed: %s", ev["ade_id"], e)
             m = _persons(matcher, merged)
         changes = diff(old, merged) if (old is None or old.get("fetched_at")) else []
+        # A listed event read in detail for the first time (the first run only reads 100 of ~1,400): its lineup is
+        # new to us. Treat it like the starting point: report it only for must-see artists.
+        first_details = old is not None and not old.get("fetched_at") and bool(merged.get("fetched_at"))
+        if first_details and any(m.must_see_for(p) for p in m.persons):
+            changes = ["new"]
         conn.execute("INSERT INTO ade_snapshots (ade_id, json, updated_at) VALUES (?,?,?) ON CONFLICT(ade_id)"
                      " DO UPDATE SET json=excluded.json, updated_at=excluded.updated_at",
                      (ev["ade_id"], json.dumps(merged, ensure_ascii=False, sort_keys=True), db.ts()))
