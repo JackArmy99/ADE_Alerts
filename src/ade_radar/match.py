@@ -174,6 +174,18 @@ TIMETABLE = re.compile(r"\b(?:time\s*-?\s*tables?|set\s*-?\s*times?|running\s+or
 NEW_CHANCE = ("presale_signup", "waitlist", "second_date", "resale")
 
 
+SOLD_OUT = re.compile(r"(?<!almost )(?<!nearly )(?<!bijna )\b(?:sold\s*-?\s*out|uitverkocht)\b", re.I)
+
+
+def is_sold_out(item: Item, cls: Classification) -> bool:
+    """Nothing to buy: no alert. A waitlist, resale, extra date or presale for it is a new chance and still alerts."""
+    if cls.ticket_status in NEW_CHANCE:
+        return False
+    if cls.ticket_status == "sold_out":
+        return True
+    return item.source != "ade" and bool(SOLD_OUT.search(" ".join([item.text or "", cls.event_name or ""])))
+
+
 def is_timetable(item: Item, cls: Classification) -> bool:
     """Timetable / set-times posts are not alert worthy, unless they also open a new way to get tickets."""
     if cls.ticket_status in NEW_CHANCE:
@@ -199,6 +211,8 @@ def _decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> De
     outside = outside_ade_week(item, cls, ctx.taste)
     if outside:
         return Decision(False, reason=outside)
+    if is_sold_out(item, cls):
+        return Decision(False, reason="sold out (nothing to buy)")
     if is_timetable(item, cls):
         return Decision(False, reason="timetable / set times (not alert worthy)")
 

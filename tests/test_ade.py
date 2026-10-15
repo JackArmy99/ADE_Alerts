@@ -90,9 +90,8 @@ def test_run_baseline_then_lineup_change(conn, ctx, fake_wa, monkeypatch):
     stats, counts = AlertStats(), {}
     ade.run(ctx, conn, counts, wa=fake_wa, stats=stats, dry_run=False)
     assert counts["baseline"] and counts["events_listed"] == 3
-    # baseline: only must_see matches alert -> Josh Baker (sold out) for jack
-    assert [p for _, p in fake_wa.sent][0][0].startswith("Gashouder presents: Josh Baker")
-    assert "SOLD OUT" in fake_wa.sent[0][1][3]
+    # baseline: Josh Baker matches but is already sold out -> no alert (nothing to buy)
+    assert not any(p[0].startswith("Gashouder presents") for _, p in fake_wa.sent)
     n_baseline = len(fake_wa.sent)
 
     fetcher.pages = _pages(html)  # Paige Tomlinson added + set times published

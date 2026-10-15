@@ -167,3 +167,20 @@ def test_timetables_are_not_alerts(ctx):
     # ...unless it also opens a new way in
     cls.ticket_status = "waitlist"
     assert decide(item, cls, m.match(item.text, item.author), ctx).send
+
+
+def test_sold_out_is_not_an_alert_but_a_waitlist_is(ctx):
+    from ade_radar.match import Matcher, decide
+    from ade_radar.models import Classification, Item
+
+    m = Matcher(ctx.taste, ctx.accounts)
+    item = Item("instagram", "so1", author="joshbaker", text="Gashouder ADE is SOLD OUT. Thank you!")
+    cls = Classification(is_ade_related=True, is_event_announcement=True, event_name="Josh Baker Gashouder",
+                         artists=["Josh Baker"], date="2026-10-25", venue="Gashouder", urgency="normal",
+                         ticket_status="unknown", relevant_for=["jack"], model="claude")
+    assert not decide(item, cls, m.match(item.text, item.author), ctx).send
+    cls.ticket_status = "waitlist"
+    assert decide(item, cls, m.match(item.text, item.author), ctx).send
+    almost = Item("instagram", "so2", author="joshbaker", text="Gashouder ADE almost sold out, final tickets")
+    cls.ticket_status = "on_sale"
+    assert decide(almost, cls, m.match(almost.text, almost.author), ctx).send

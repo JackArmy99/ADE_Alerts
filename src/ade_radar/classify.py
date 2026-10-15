@@ -31,6 +31,8 @@ Return ONLY one JSON object with these fields:
   announcing its programme for another month or season (e.g. March, New Year, 2027) is false.
 - is_event_announcement: true if it announces or updates a specific event (lineup, tickets, sign-up,
   sold out, extra date). Recaps, memes and generic promo are false.
+- An event that is sold out is NOT alert worthy (urgency "ignore", ticket_status "sold_out"), unless the same
+  item opens a waitlist, resale, extra date or presale (then use that ticket_status).
 - Timetables / set times / running orders / stage times for an event are NOT alert worthy: urgency "ignore",
   and start reason with "timetable". Exception: the same item also opens a presale, sign-up, waitlist,
   extra date or resale.
