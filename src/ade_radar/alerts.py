@@ -57,7 +57,8 @@ def best_link(item: Item, cls: Classification) -> str:
     return profile or "https://www.amsterdam-dance-event.nl/en/program/"
 
 
-def template_params(item: Item, cls: Classification, d: Decision, detail: str | None = None) -> list[str]:
+def template_params(item: Item, cls: Classification, d: Decision, detail: str | None = None,
+                    emoji: str = "") -> list[str]:
     name = cls.event_name or ""
     extra = [a for a in cls.artists if compact(a) not in compact(name)][:3]
     if name and extra:
@@ -68,6 +69,8 @@ def template_params(item: Item, cls: Classification, d: Decision, detail: str | 
         p1 = ", ".join(cls.artists[:4])
     else:
         p1 = f"Post by @{item.author}" if item.author else "New ADE item"
+    if emoji:
+        p1 = f"{emoji} {p1}"
     if detail is None:
         detail = STATUS_TEXT.get(cls.ticket_status, "new announcement")
         who = f"@{item.author}" if item.source.startswith("instagram") and item.author else ""
@@ -160,7 +163,7 @@ def dispatch(conn, ctx: Context, wa: WhatsApp | None, item: Item, cls: Classific
              event_id: int | str, stats: AlertStats, dry_run: bool, detail: str | None = None) -> None:
     s = ctx.settings
     rh = reason_hash(event_id, d.kind)
-    params = template_params(item, cls, d, detail)
+    params = template_params(item, cls, d, detail, emoji=s.alert_emoji)
     cap = int(ctx.taste.constraints.get("max_alerts_per_person_per_day") or 15)
     sent_now = 0
     for person in d.recipients:

@@ -55,6 +55,7 @@ class Settings:
     ig_max_age_hours: float = 48  # posts older than this are never alerted on
     ig_min_minutes: float = 25  # at most one Instagram run per this many minutes (scheduled every 30)
     ade_filter_url: str = ""  # ADE programme listing to watch; empty = the default in sources/ade.py
+    alert_emoji: str = ""  # put in front of every alert's event name; .env default is a rock (load_settings)
 
     @property
     def data_dir(self) -> Path:
@@ -117,6 +118,7 @@ def load_settings(root: Path | None = None) -> Settings:
         ig_max_age_hours=float(e("IG_MAX_AGE_HOURS") or 48),
         ig_min_minutes=float(e("IG_MIN_MINUTES") or 25),
         ade_filter_url=e("ADE_FILTER_URL", ""),
+        alert_emoji=(e("ALERT_EMOJI") if e("ALERT_EMOJI") is not None else "\U0001FAA8").strip(),
     )
 
 

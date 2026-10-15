@@ -67,7 +67,8 @@ def test_whatsapp(ctx: Context, only: str | None = None) -> None:
         print(f"hello_world -> {person}: {'OK ' + r.message_id if r.ok else 'FAILED ' + r.error}")
         if approved:
             t = approved[0]
-            r = wa.send_template(phone, SAMPLE, template=name, lang=t.get("language"))
+            sample = [f"{s.alert_emoji} {SAMPLE[0]}".strip(), *SAMPLE[1:]]
+            r = wa.send_template(phone, sample, template=name, lang=t.get("language"))
             print(f"{name} -> {person}: {'OK ' + r.message_id if r.ok else 'FAILED ' + r.error}")
 
 
