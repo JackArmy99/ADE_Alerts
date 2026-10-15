@@ -166,8 +166,13 @@ def dispatch(conn, ctx: Context, wa: WhatsApp | None, item: Item, cls: Classific
     params = template_params(item, cls, d, detail, emoji=s.alert_emoji)
     cap = int(ctx.taste.constraints.get("max_alerts_per_person_per_day") or 15)
     sent_now = 0
+    # Sent to anyone in an earlier run? Then it is old news: people added later get no catch-up. Someone whose
+    # send failed was meant to get it, so they still do.
+    old_news = conn.execute("SELECT 1 FROM alerts WHERE reason_hash=? AND status='sent'", (rh,)).fetchone()
     for person in d.recipients:
-        if _already(conn, item.id, rh, person):
+        tried = conn.execute("SELECT 1 FROM alerts WHERE reason_hash=? AND recipient=? AND status='failed'",
+                             (rh, person)).fetchone()
+        if (old_news and not tried) or _already(conn, item.id, rh, person):
             stats.skipped += 1
             continue
         if d.urgency != "urgent" and sent_today(conn, person) >= cap:

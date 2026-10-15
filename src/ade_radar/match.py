@@ -182,6 +182,13 @@ def is_timetable(item: Item, cls: Classification) -> bool:
 
 
 def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Decision:
+    d = _decide(item, cls, m, ctx)
+    if d.send and ctx.settings.alert_everyone:
+        d.recipients = list(ctx.settings.recipients) or d.recipients  # the whole group gets every alert
+    return d
+
+
+def _decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Decision:
     known = list(ctx.settings.recipients) or list(ctx.taste.people)
     used_claude = cls.model != "rules"
     ade = cls.is_ade_related if used_claude else (m.ade_related or item.source == "ade")
