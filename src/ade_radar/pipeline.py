@@ -70,7 +70,7 @@ def _process_one(conn, ctx: Context, item: Item, matcher: Matcher, today: str, *
     dispatch(conn, ctx, wa, item, cls, d, event_id, stats, dry_run)
 
 
-def run_source(ctx: Context, source: str, dry_run: bool = False, force: bool = False) -> dict:
+def run_source(ctx: Context, source: str, dry_run: bool = False, force: bool = False, full: bool = False) -> dict:
     """Runs one source with run bookkeeping. Dry runs roll back all DB writes except the run record."""
     s = ctx.settings
     conn = db.connect(s.db_path)
@@ -95,7 +95,7 @@ def run_source(ctx: Context, source: str, dry_run: bool = False, force: bool = F
                           counts=counts)
         elif source == "ade":
             from .sources import ade
-            ade.run(ctx, conn, counts, wa=wa, stats=stats, dry_run=dry_run)
+            ade.run(ctx, conn, counts, wa=wa, stats=stats, dry_run=dry_run, full=full)
         else:
             raise ValueError(f"unknown source {source}")
     except SourceBlocked as e:

@@ -470,16 +470,16 @@ def _persons(matcher: Matcher, ev: dict):
     return m
 
 
-def run(ctx: Context, conn, counts: dict, *, wa, stats: AlertStats, dry_run: bool) -> None:
+def run(ctx: Context, conn, counts: dict, *, wa, stats: AlertStats, dry_run: bool, full: bool = False) -> None:
     f = Fetcher()
     try:
-        _run(ctx, conn, counts, f, wa=wa, stats=stats, dry_run=dry_run)
+        _run(ctx, conn, counts, f, wa=wa, stats=stats, dry_run=dry_run, full=full)
     finally:
         counts["pages_rendered"] = f.rendered
         f.close()
 
 
-def _run(ctx: Context, conn, counts: dict, f, *, wa, stats: AlertStats, dry_run: bool) -> None:
+def _run(ctx: Context, conn, counts: dict, f, *, wa, stats: AlertStats, dry_run: bool, full: bool = False) -> None:
     listing = fetch_listing(ctx, f, counts)
     counts["events_listed"] = len(listing)
     if not listing:
@@ -489,31 +489,40 @@ def _run(ctx: Context, conn, counts: dict, f, *, wa, stats: AlertStats, dry_run:
     matcher = Matcher(ctx.taste, ctx.accounts)
     fetched = 0
     alerts_considered = 0
-    # Matched events first, then never-fetched ones, then stale ones.
+    # Newly announced events first, then matched events, then never-fetched ones, then stale ones.
     def priority(ev):
         old = snapshots.get(ev["ade_id"])
+        fresh = (old is None and not baseline) or bool(old and old.get("is_new") and not old.get("fetched_at"))
         matched = bool(_persons(matcher, {**(old or {}), **ev}).persons)
-        return (0 if matched else 1, 0 if old is None or not old.get("fetched_at") else 1)
+        return (0 if fresh else 1, 0 if matched else 1, 0 if old is None or not old.get("fetched_at") else 1)
 
     for ev in sorted(listing, key=priority):
         old = snapshots.get(ev["ade_id"])
         merged = {**(old or {}), **{k: v for k, v in ev.items() if v not in (None, "", [])}}
+        if old is None and not baseline:
+            merged["is_new"] = True  # announced since the baseline; alert once its lineup is known
         m = _persons(matcher, merged)
         needs_fetch = old is None or not old.get("fetched_at") or bool(m.persons) or _stale(old)
-        if needs_fetch and fetched < MAX_DETAIL_FETCHES:
+        if needs_fetch and (full or fetched < MAX_DETAIL_FETCHES):
             try:
                 merged = fetch_details(f, merged)
                 fetched += 1
+                if full:
+                    time.sleep(0.4)  # ~1,400 pages: be gentle with the ADE site
+                    if fetched % 100 == 0:
+                        log.info("ADE full scan: %d event pages read", fetched)
             except requests.RequestException as e:
                 log.warning("ADE event %s fetch failed: %s", ev["ade_id"], e)
             m = _persons(matcher, merged)
         merged = sanitize_date(merged)
         changes = diff(old, merged) if (old is None or old.get("fetched_at")) else []
-        # A listed event read in detail for the first time (the first run only reads 100 of ~1,400): its lineup is
-        # new to us. Treat it like the starting point: report it only for must-see artists.
+        # A listed event read in detail for the first time is not news (it was already on the programme): it only
+        # becomes the starting point for later lineup changes. Only events new to the listing alert.
         first_details = old is not None and not old.get("fetched_at") and bool(merged.get("fetched_at"))
-        if first_details and any(m.must_see_for(p) for p in m.persons):
+        if first_details and merged.get("is_new"):
             changes = ["new"]
+        if merged.get("fetched_at"):
+            merged.pop("is_new", None)
         conn.execute("INSERT INTO ade_snapshots (ade_id, json, updated_at) VALUES (?,?,?) ON CONFLICT(ade_id)"
                      " DO UPDATE SET json=excluded.json, updated_at=excluded.updated_at",
                      (ev["ade_id"], json.dumps(merged, ensure_ascii=False, sort_keys=True), db.ts()))
@@ -538,9 +547,8 @@ def _stale(old: dict) -> bool:
 
 
 def ade_route(change: str, m, ctx: Context) -> str:
-    """whatsapp: a new event or a lineup addition with any of the group's artists (must_see or like).
-    digest:   sold out changes.
-    ignore:   lineup changes without any of the group's artists, and set times / timetables (not alert worthy)."""
+    """whatsapp: a new event, or one of the group's artists (must_see or like) added to an event's lineup.
+    ignore:   everything else: other lineup changes, sold out, set times / timetables (not alert worthy)."""
     must = {compact(n) for p in m.hits for n in m.must_see_for(p)}
     liked = {compact(h.name) for hits in m.hits.values() for h in hits if h.level in ("must_see", "like")}
     if change.startswith("lineup:"):
@@ -550,7 +558,7 @@ def ade_route(change: str, m, ctx: Context) -> str:
         return "whatsapp"
     if change == "set_times":
         return "ignore"
-    return "digest"  # sold_out and anything else
+    return "ignore"  # sold_out and anything else
 
 
 def _digest_text(change: str, ev: dict) -> str:

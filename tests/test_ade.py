@@ -151,27 +151,45 @@ def test_ade_route(ctx):
     assert ade.ade_route("lineup:Josh Baker", must, ctx) == "whatsapp"
     assert ade.ade_route("lineup:Marsolo", like, ctx) == "whatsapp"
     assert ade.ade_route("lineup:Random DJ", like, ctx) == "ignore"
-    assert ade.ade_route("sold_out", must, ctx) == "digest"
+    assert ade.ade_route("sold_out", must, ctx) == "ignore"
     assert ade.ade_route("set_times", must, ctx) == "ignore"
     assert ade.ade_route("set_times", like, ctx) == "ignore"
 
 
-def test_must_see_found_when_listed_event_is_read_in_detail_later(conn, ctx, fake_wa, monkeypatch):
-    """First run reads only some events in detail; a must-see in a later-read lineup is still reported once."""
-    listing = ('<ul><li><a href="/en/program/2026/night-one/2009001/"><h3>Night One</h3></a></li>'
-               '<li><a href="/en/program/2026/night-two/2009002/"><h3>Night Two</h3></a></li></ul>')
-    pages = {"program/filter": listing, "page=2": "<html></html>",
+def test_only_events_new_to_the_programme_alert(conn, ctx, fake_wa, monkeypatch):
+    """Events already listed but read in detail later are not news; an event that appears later is, once."""
+    one = '<li><a href="/en/program/2026/night-one/2009001/"><h3>Night One</h3></a></li>'
+    two = '<li><a href="/en/program/2026/night-two/2009002/"><h3>Night Two</h3></a></li>'
+    three = '<li><a href="/en/program/2026/night-three/2009003/"><h3>Night Three</h3></a></li>'
+    pages = {"program/filter": f"<ul>{one}{two}</ul>", "page=2": "<html></html>",
              "night-one/2009001": "<h1>Night One</h1><p>Nobody (DE)</p>",
-             "night-two/2009002": "<h1>Night Two</h1><p>Kyle Starkey (GB)</p><p>Someone (NL)</p>"}
+             "night-two/2009002": "<h1>Night Two</h1><p>Kyle Starkey (GB)</p><p>Someone (NL)</p>",
+             "night-three/2009003": "<h1>Night Three</h1><p>Kyle Starkey (GB)</p>"}
     fetcher = FakeFetcher(pages)
     monkeypatch.setattr(ade, "Fetcher", lambda: fetcher)
     monkeypatch.setattr(ade, "MAX_DETAIL_FETCHES", 1)  # first run only reads one event in detail
-    ade.run(ctx, conn, {}, wa=fake_wa, stats=AlertStats(), dry_run=False)
-    ade.run(ctx, conn, {}, wa=fake_wa, stats=AlertStats(), dry_run=False)
-    ade.run(ctx, conn, {}, wa=fake_wa, stats=AlertStats(), dry_run=False)
+    for _ in range(3):
+        ade.run(ctx, conn, {}, wa=fake_wa, stats=AlertStats(), dry_run=False)
     titles = [p[0] for _, p in fake_wa.sent]
-    assert sum(t.startswith("Night Two") for t in titles) == 1  # Kyle Starkey (must-see): reported exactly once
-    assert not any(t.startswith("Night One") for t in titles)
+    assert not any(t.startswith(("Night One", "Night Two")) for t in titles)  # already on the programme
+    pages["program/filter"] = f"<ul>{one}{two}{three}</ul>"  # announced later
+    for _ in range(2):
+        ade.run(ctx, conn, {}, wa=fake_wa, stats=AlertStats(), dry_run=False)
+    titles = [p[0] for _, p in fake_wa.sent]
+    assert sum(t.startswith("Night Three") for t in titles) == 1
+
+
+def test_full_scan_reads_every_event_without_alerts(conn, ctx, fake_wa, monkeypatch):
+    items = "".join(f'<li><a href="/en/program/2026/n{i}/20090{i:02d}/"><h3>N{i}</h3></a></li>' for i in range(5))
+    pages = {"program/filter": f"<ul>{items}</ul>", "page=2": "<html></html>",
+             **{f"n{i}/20090{i:02d}": f"<h1>N{i}</h1><p>Kyle Starkey (GB)</p>" for i in range(5)}}
+    monkeypatch.setattr(ade, "Fetcher", lambda: FakeFetcher(pages))
+    monkeypatch.setattr(ade, "MAX_DETAIL_FETCHES", 1)
+    monkeypatch.setattr(ade.time, "sleep", lambda s: None)
+    ade.run(ctx, conn, {}, wa=fake_wa, stats=AlertStats(), dry_run=False)  # baseline
+    counts: dict = {}
+    ade.run(ctx, conn, counts, wa=fake_wa, stats=AlertStats(), dry_run=False, full=True)
+    assert counts["events_fetched"] == 5
 
 
 def test_wrong_ics_date_is_replaced_by_page_date():

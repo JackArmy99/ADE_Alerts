@@ -463,6 +463,8 @@ def advance_story(page, frame_id: str) -> str:
     page.keyboard.press("ArrowRight")
     for how, action in (("key", None), ("button", _story_next_button)):
         if action is not None:
+            if moved():
+                return "key"  # the key worked, just slowly: clicking Next now would skip a story
             btn = action(page)
             if btn is None:
                 break
@@ -470,7 +472,7 @@ def advance_story(page, frame_id: str) -> str:
                 btn.click(timeout=2000)
             except Exception:  # noqa: BLE001
                 break
-        end = time.monotonic() + 3
+        end = time.monotonic() + 4
         while time.monotonic() < end:
             if "/stories/" not in page.url:
                 return "closed"
