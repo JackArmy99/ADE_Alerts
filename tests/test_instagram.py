@@ -138,33 +138,39 @@ def test_collect_feed_on_fixture_skips_old_posts(conn, tmp_path, monkeypatch):
 
 STORY_VIEWER = """<html><body>
 <button aria-label="Story by kettama, not seen" id="tray">kettama</button>
-<section><div id="frame">frame</div>
+<section><div id="frame"><img width="300" height="500" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="><time id="t" datetime="">2h</time></div>
 <div role="button" id="next"><svg aria-label="Next" width="20" height="20"></svg></div></section>
 <script>
-  const frames = ['/stories/kettama/1001/', '/stories/kettama/1002/', '/stories/socialpleasure/2001/'];
+  const IDS = USE_IDS;
+  const frames = [['kettama', '1001', '2026-10-15T08:00:00.000Z'], ['kettama', '1002', '2026-10-15T08:05:00.000Z'],
+                  ['socialpleasure', '2001', '2026-10-15T07:00:00.000Z']];
+  const path = f => '/stories/' + f[0] + '/' + (IDS ? f[1] + '/' : '');
+  const show = i => { history.pushState({}, '', path(frames[i])); document.getElementById('t').setAttribute('datetime', frames[i][2]); };
   let i = 0;
-  const go = () => { i++; if (i < frames.length) { history.pushState({}, '', frames[i]); }
-                     else { history.pushState({}, '', '/'); } };
+  if (location.pathname.startsWith('/stories/')) show(0);
+  const go = () => { i++; if (i < frames.length) { show(i); } else { history.pushState({}, '', '/'); } };
   // Like Instagram: arrow keys only work when focus is not on a tray button (the tray swallows them).
   document.addEventListener('keydown', e => {
     if (e.key === 'ArrowRight' && !(KEYS_BLOCKED || document.activeElement.id === 'tray')) go(); });
   document.getElementById('next').addEventListener('click', go);
-  // The viewer address appears a moment after the tray click.
+  // The viewer appears a moment after the tray click.
   document.getElementById('tray').addEventListener('click', () =>
-    setTimeout(() => { if (!location.pathname.startsWith('/stories/')) history.pushState({}, '', frames[0]); }, 1500));
+    setTimeout(() => { if (!location.pathname.startsWith('/stories/')) show(0); }, 1500));
   document.getElementById('tray').focus();
 </script></body></html>"""
 
 
 @pytest.mark.skipif(not CHROMIUM.exists(), reason="no local chromium")
-@pytest.mark.parametrize("keys_blocked,start", [(False, "stories/kettama/1001/"), (True, "stories/kettama/1001/"),
-                                               (False, "")])
-def test_stories_walks_every_frame(conn, tmp_path, monkeypatch, keys_blocked, start):
+@pytest.mark.parametrize("keys_blocked,start,use_ids", [
+    (False, "stories/kettama/1001/", True), (True, "stories/kettama/1001/", True), (False, "", True),
+    (False, "", False), (True, "stories/kettama/", False)])
+def test_stories_walks_every_frame(conn, tmp_path, monkeypatch, keys_blocked, start, use_ids):
     from playwright.sync_api import sync_playwright
     from ade_radar.sources import instagram
 
     monkeypatch.setattr(instagram, "human_pause", lambda *a, **k: None)
-    html = STORY_VIEWER.replace("KEYS_BLOCKED", "true" if keys_blocked else "false")
+    html = STORY_VIEWER.replace("KEYS_BLOCKED", "true" if keys_blocked else "false").replace(
+        "USE_IDS", "true" if use_ids else "false")
     counts: dict = {}
     with sync_playwright() as p:
         b = p.chromium.launch(executable_path=str(CHROMIUM), headless=True)
@@ -173,6 +179,10 @@ def test_stories_walks_every_frame(conn, tmp_path, monkeypatch, keys_blocked, st
         page.goto("https://www.instagram.com/" + start)
         items = instagram.collect_stories(page, conn, tmp_path, counts)
         b.close()
-    assert [i.external_id.split("/")[-2] for i in items] == ["1001", "1002", "2001"]
-    assert items[-1].author == "socialpleasure"
+    assert [i.author for i in items] == ["kettama", "kettama", "socialpleasure"], counts
+    assert len({i.external_id for i in items}) == 3
+    if use_ids:
+        assert items[0].external_id == "https://www.instagram.com/stories/kettama/1001/"
+    else:
+        assert items[0].external_id == "https://www.instagram.com/stories/kettama/#2026-10-15T08:00:00.000Z"
     assert counts["story_stop"].startswith("viewer closed")

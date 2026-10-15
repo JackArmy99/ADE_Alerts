@@ -6,6 +6,7 @@ Instagram markup changes often: everything here fails soft, and a login wall / c
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import time
@@ -343,6 +344,47 @@ def _capture_post(page, art, post: dict, shots: Path) -> Item:
                 raw={"collaborators": post["collaborators"], "location": post["location"]})
 
 
+STORY_USER = re.compile(r"/stories/([A-Za-z0-9._]+)/?(?:[?#]|$|\d)")
+STORY_FRAME_JS = """
+() => {
+  const area = el => { const r = el.getBoundingClientRect(); return r.width * r.height; };
+  const shown = el => { const r = el.getBoundingClientRect();
+    return r.width > 150 && r.height > 150 && r.bottom > 0 && r.top < innerHeight; };
+  const media = Array.from(document.querySelectorAll('video, img')).filter(shown).sort((a, b) => area(b) - area(a))[0];
+  // The frame's own <time>: the nearest one around the story image, else any visible one.
+  let t = null;
+  for (let n = media; n && !t && n !== document.body; n = n.parentElement) t = n.querySelector('time');
+  if (!t) t = Array.from(document.querySelectorAll('time')).find(t => t.getBoundingClientRect().width > 0);
+  return {time: t ? t.getAttribute('datetime') : '',
+          src: media ? (media.currentSrc || media.src || media.poster || '') : ''};
+}
+"""
+
+
+def story_frame(page) -> tuple[str, str] | None:
+    """(author, id) of the story frame on screen. Instagram used to put a frame id in the address
+    (/stories/<user>/<id>/); since Oct 2026 it can show only /stories/<user>/, so the id is then built from the
+    frame's posting time (or its image) instead."""
+    parsed = parse_story_url(page.url)
+    if parsed:
+        return parsed
+    m = STORY_USER.search(page.url or "")
+    if not m or m.group(1).lower() in RESERVED:
+        return None
+    author = m.group(1).lower()
+    try:
+        info = page.evaluate(STORY_FRAME_JS) or {}
+    except Exception:  # noqa: BLE001
+        info = {}
+    key = info.get("time") or ""
+    if not key and info.get("src"):
+        src = info["src"]
+        key = hashlib.sha1((src if src.startswith("blob:") else src.split("?")[0]).encode()).hexdigest()[:16]
+    if not key:
+        return None
+    return author, f"https://www.instagram.com/stories/{author}/#{key}"
+
+
 def _story_next_button(page):
     """The viewer's own 'Next' arrow (svg aria-label='Next' inside a clickable element), if visible."""
     for loc in (page.get_by_role("button", name=re.compile(r"^Next$", re.I)),
@@ -357,46 +399,50 @@ def _story_next_button(page):
     return None
 
 
-def _wait_url_change(page, url: str, seconds: float) -> bool:
+def _wait_frame(page, seconds: float, not_id: str = "") -> tuple[str, str] | None:
+    """Wait until a story frame (other than not_id) is on screen; None if the viewer closed or nothing changed."""
     end = time.monotonic() + seconds
-    while time.monotonic() < end:
-        if page.url.rstrip("/") != url.rstrip("/"):
-            return True
-        time.sleep(0.2)
-    return False
+    while True:
+        if "/stories/" not in page.url and not_id:
+            return None  # viewer closed
+        f = story_frame(page)
+        if f and f[1] != not_id:
+            return f
+        if time.monotonic() >= end:
+            return None
+        time.sleep(0.25)
 
 
-def _wait_story_url(page, seconds: float) -> bool:
-    """The viewer address can show up a moment after the click, and first as /stories/<user>/ without the id."""
-    end = time.monotonic() + seconds
-    while time.monotonic() < end:
-        if parse_story_url(page.url):
-            return True
-        time.sleep(0.3)
-    return False
+def advance_story(page, frame_id: str) -> str:
+    """Move to the next story frame. Returns how: 'auto', 'key', 'button', 'closed' or '' when stuck.
+    The tray button keeps keyboard focus after the click, so focus is dropped first. No Space key (it 'clicks'
+    whatever button has focus)."""
+    def moved() -> bool:
+        return "/stories/" not in page.url or (story_frame(page) or ("", frame_id))[1] != frame_id
 
-
-def advance_story(page, url: str) -> str:
-    """Move to the next story frame. Returns how: 'auto', 'key', 'button' or '' when stuck.
-    The tray button keeps keyboard focus after the click, so keys went to the tray instead of the viewer;
-    focus is dropped first. The Space key is not used at all (it 'clicks' whatever button has focus)."""
-    if page.url.rstrip("/") != url.rstrip("/"):
-        return "auto"  # the story advanced by itself while we were capturing
+    if moved():
+        return "auto"  # advanced (or closed) by itself while we were capturing
     try:
         page.evaluate("() => { if (document.activeElement) document.activeElement.blur(); }")
     except Exception:  # noqa: BLE001
         pass
     page.keyboard.press("ArrowRight")
-    if _wait_url_change(page, url, 3):
-        return "key"
-    btn = _story_next_button(page)
-    if btn is not None:
-        try:
-            btn.click(timeout=2000)
-            if _wait_url_change(page, url, 3):
-                return "button"
-        except Exception:  # noqa: BLE001
-            pass
+    for how, action in (("key", None), ("button", _story_next_button)):
+        if action is not None:
+            btn = action(page)
+            if btn is None:
+                break
+            try:
+                btn.click(timeout=2000)
+            except Exception:  # noqa: BLE001
+                break
+        end = time.monotonic() + 3
+        while time.monotonic() < end:
+            if "/stories/" not in page.url:
+                return "closed"
+            if moved():
+                return how
+            time.sleep(0.25)
     return ""
 
 
@@ -420,8 +466,9 @@ def collect_stories(page, conn, shots: Path, counts: dict) -> list[Item]:
             page.get_by_role("button", name=label).click(timeout=1500)
         except Exception:  # noqa: BLE001
             pass
-    if not _wait_story_url(page, 10):
-        # The viewer did not open (or uses another address): keep evidence for the next fix.
+    frame = _wait_frame(page, 10)
+    if frame is None:
+        # The viewer did not open (or shows nothing we recognise): keep evidence for the next fix.
         counts["story_stop"] = f"viewer did not open (url {page.url.split('?')[0][-60:]})"
         log.warning("instagram stories: %s", counts["story_stop"])
         try:
@@ -433,17 +480,12 @@ def collect_stories(page, conn, shots: Path, counts: dict) -> list[Item]:
     frames = 0
     stop = "max frames"
     for _ in range(MAX_STORY_FRAMES):
-        parsed = parse_story_url(page.url)
-        if not parsed and "/stories/" in page.url and _wait_story_url(page, 3):
-            parsed = parse_story_url(page.url)
-        if not parsed:
-            stop = "viewer closed (all stories watched)"
-            break
-        author, url = parsed
+        author, url = frame
         frames += 1
         if not db.ig_is_seen(conn, url) and all(i.external_id != url for i in items):
             time.sleep(0.8)  # let the frame render
-            path = shots / f"story_{author}_{url.rstrip('/').split('/')[-1]}.jpg"
+            name = re.sub(r"[^\w.-]", "_", url.rstrip("/").rsplit("/", 1)[-1])[:40]
+            path = shots / f"story_{author}_{name}.jpg"
             page.screenshot(path=str(path), type="jpeg", quality=80)
             text = ""
             try:
@@ -451,11 +493,15 @@ def collect_stories(page, conn, shots: Path, counts: dict) -> list[Item]:
             except Exception:  # noqa: BLE001
                 pass
             mentions = sorted({h.lower() for h in MENTION.findall(text)} - {author})
-            items.append(Item(source="instagram_story", external_id=url, url=url, author=author,
-                              text=clean_caption(text), screenshot_paths=[str(path)], tagged=mentions))
+            items.append(Item(source="instagram_story", external_id=url, url=f"https://www.instagram.com/{author}/",
+                              author=author, text=clean_caption(text), screenshot_paths=[str(path)], tagged=mentions))
         if (reason := check_wall(page)):
             raise SourceBlocked(f"Instagram {reason}")
-        if not advance_story(page, url):
+        how = advance_story(page, url)
+        if how == "closed":
+            stop = "viewer closed (all stories watched)"
+            break
+        if not how:
             stop = "stuck (could not move to the next story)"
             try:
                 page.screenshot(path=str(shots / "story_stuck.jpg"), type="jpeg", quality=70)
@@ -463,6 +509,10 @@ def collect_stories(page, conn, shots: Path, counts: dict) -> list[Item]:
                 pass
             break
         human_pause(0.6, 1.4)
+        frame = _wait_frame(page, 3)
+        if frame is None:
+            stop = "viewer closed (all stories watched)"
+            break
     counts["story_frames"] = frames
     counts["story_stop"] = stop
     log.info("instagram stories: %d frames viewed, %d new, stopped: %s", frames, len(items), stop)
