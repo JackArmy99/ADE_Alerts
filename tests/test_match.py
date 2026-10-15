@@ -109,3 +109,29 @@ def test_popup_wording_variants_and_new_must_see(ctx):
     assert "Klangkuenstler" in m.match("ADE: Klangkünstler all night long").must_see_for("jack")
     assert "Dart" in m.match("ADE: Dart b2b Bou").must_see_for("jack")
     assert not m.match("ADE: Eli Brown live").must_see_for("jack")  # moved to like
+
+
+def test_events_outside_ade_week_never_alert(ctx):
+    m = Matcher(ctx.taste, ctx.accounts)
+    item = Item("instagram", "v1", author="thuishaven", text="Thuishaven March programme: Josh Baker, presale now")
+    march = Classification(is_ade_related=True, is_event_announcement=True, urgency="urgent", date="2027-03-14",
+                           artists=["Josh Baker"], ticket_status="presale_signup", model="claude")
+    d = decide(item, march, m.match(item.text, item.author), ctx)
+    assert not d.send and "outside ADE week" in d.reason
+    # no date extracted, but the text names another month
+    nodate = Classification(is_ade_related=True, is_event_announcement=True, urgency="urgent",
+                            artists=["Josh Baker"], model="claude")
+    item2 = Item("instagram", "v2", author="thuishaven", text="Josh Baker at Thuishaven on 14 March, presale now")
+    assert not decide(item2, nodate, m.match(item2.text, item2.author), ctx).send
+    # inside the week, including an after-midnight set on the 26th (= night of the 25th)
+    for date, time in (("2026-10-22", "23:00"), ("2026-10-26", "02:00")):
+        ok = Classification(is_ade_related=True, is_event_announcement=True, urgency="urgent", date=date, time=time,
+                            artists=["Josh Baker"], ticket_status="presale_signup", model="claude")
+        assert decide(item, ok, m.match(item.text, item.author), ctx).send, date
+    # 27 Oct is after ADE
+    late = Classification(is_ade_related=True, is_event_announcement=True, urgency="urgent", date="2026-10-27",
+                          time="23:00", artists=["Josh Baker"], model="claude")
+    assert not decide(item, late, m.match(item.text, item.author), ctx).send
+    # "ADE 2026 on 22 Oct, tickets from 1 March" style text still passes (October / ADE mentioned)
+    item3 = Item("instagram", "v3", author="x", text="ADE pop-up 22 Oct with Josh Baker, presale since 1 March")
+    assert decide(item3, nodate, m.match(item3.text, item3.author), ctx).send

@@ -145,6 +145,30 @@ def is_gold(item: Item, cls: Classification, m: MatchResult, persons: set[str], 
     return m.priority_urgent or bool(must)
 
 
+_MONTHS = (r"jan(?:uary|uari)?|feb(?:ruary|ruari)?|mar(?:ch)?|maart|apr(?:il)?|may|mei|june?|juni|july?|juli|"
+           r"aug(?:ust|ustus)?|sep(?:t|tember)?|nov(?:ember)?|dec(?:ember)?")
+OTHER_MONTH = re.compile(rf"\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:{_MONTHS})\b|\b(?:{_MONTHS})\s+\d{{1,2}}(?:st|nd|rd|th)?\b|"
+                         rf"\b(?:{_MONTHS})\s+20\d\d\b", re.I)
+OCTOBER = re.compile(r"\b(?:oct(?:ober)?|okt(?:ober)?)\b|\b2[1-5][./-]10\b|\bADE\b", re.I)
+
+
+def outside_ade_week(item: Item, cls: Classification, taste: Taste) -> str:
+    """Reason text when the item is clearly about a date outside ADE week, else ''.
+    Known date: its night must fall in festival_dates (after-midnight sets count for the previous night).
+    No date: a day+month that is not October (e.g. '14 March', 'March 2027') with no October / ADE mention."""
+    from .normalize import night_of, parse_date
+
+    days = [parse_date(d) for d in (taste.constraints.get("festival_dates") or ["2026-10-21", "2026-10-25"])]
+    start, end = days[0], days[-1]
+    night = night_of(cls.date, cls.time)
+    if night is not None:
+        return "" if start <= night <= end else f"outside ADE week ({cls.date})"
+    text = " ".join([item.text or "", cls.event_name or ""])
+    if OTHER_MONTH.search(text) and not OCTOBER.search(text):
+        return "outside ADE week (mentions another month)"
+    return ""
+
+
 def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Decision:
     known = list(ctx.settings.recipients) or list(ctx.taste.people)
     used_claude = cls.model != "rules"
@@ -153,6 +177,9 @@ def decide(item: Item, cls: Classification, m: MatchResult, ctx: Context) -> Dec
         ade = True
     if not ade:
         return Decision(False, reason="not ADE related")
+    outside = outside_ade_week(item, cls, ctx.taste)
+    if outside:
+        return Decision(False, reason=outside)
 
     persons = ({p for p in cls.relevant_for if p in known} | m.persons) & set(known)
     why = []
