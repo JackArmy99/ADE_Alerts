@@ -188,8 +188,13 @@ def test_full_scan_reads_every_event_without_alerts(conn, ctx, fake_wa, monkeypa
     monkeypatch.setattr(ade.time, "sleep", lambda s: None)
     ade.run(ctx, conn, {}, wa=fake_wa, stats=AlertStats(), dry_run=False)  # baseline
     counts: dict = {}
+    pages["program/filter"] = pages["program/filter"].replace("</ul>",
+        '<li><a href="/en/program/2026/n9/2009099/"><h3>N9</h3></a></li></ul>')
+    pages["n9/2009099"] = "<h1>N9</h1><p>Kyle Starkey (GB)</p>"
+    sent = len(fake_wa.sent)
     ade.run(ctx, conn, counts, wa=fake_wa, stats=AlertStats(), dry_run=False, full=True)
-    assert counts["events_fetched"] == 5
+    assert counts["events_fetched"] == 6
+    assert len(fake_wa.sent) == sent  # the full scan never messages, not even for a new event
 
 
 def test_wrong_ics_date_is_replaced_by_page_date():

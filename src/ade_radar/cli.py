@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--dry-run", action="store_true", help="print WhatsApp messages instead of sending")
     r.add_argument("--force", action="store_true", help="ignore the Instagram once-per-hour guard")
     r.add_argument("--full", action="store_true",
-                   help="ADE: read every event page now (takes ~15-30 min); only brand-new events alert")
+                   help="ADE: read every event page now (takes ~15-30 min); sends no messages")
     t = sub.add_parser("test-whatsapp", help="send hello_world (and ade_alert if approved)")
     t.add_argument("--to", help="only this recipient name, e.g. jack")
     ct = sub.add_parser("check-template", help="print a template's status, language and components from Meta")
