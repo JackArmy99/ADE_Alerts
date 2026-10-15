@@ -45,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     f = sub.add_parser("follow-slowly", help="follow Tier 2 accounts slowly")
     f.add_argument("--file", default="config/handles_tier2.txt")
     f.add_argument("--propose", action="store_true", help="look up handles and write --file for review")
+    sub.add_parser("ade-report", help="programme events with the group's artists, pop-ups first")
     sub.add_parser("ade-discover", help="find the JSON endpoint behind the ADE filter page")
     sub.add_parser("meta-debug", help="ask Meta about the token, app, WhatsApp account and number")
     sub.add_parser("status", help="last runs per source and alert counts")
@@ -117,6 +118,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "ade-discover":
         from .sources import ade
         print(f"saved to {ade.discover(ctx)}")
+        return 0
+    if args.cmd == "ade-report":
+        from . import db
+        from .sources import ade
+        conn = db.connect(s.db_path)
+        text = ade.report(ctx, conn)
+        conn.close()
+        out = s.data_dir / "ade_report.txt"
+        out.write_text(text, encoding="utf-8")
+        print(text)
+        print(f"\n(saved to {out})")
         return 0
     if args.cmd == "email-report":
         from . import db

@@ -221,3 +221,18 @@ def test_ics_ignores_timezone_block_dates():
     """Live bug 15 Oct: alerts said 'Sun 29 Mar 01:00' (the DST switch in VTIMEZONE) instead of the event date."""
     ics = ade.parse_ics(ICS_WITH_TIMEZONE)
     assert ics["date"] == "2026-10-24" and ics["time"] == "20:00" and ics["venue"] == "AFAS Live"
+
+
+def test_report_groups_popups_first(conn, ctx):
+    import json as _json
+    rows = [{"ade_id": "1", "title": "Secret Location pop-up", "lineup": ["Paige Tomlinson"], "date": "2026-10-23",
+             "fetched_at": "x"},
+            {"ade_id": "2", "title": "Big Night", "lineup": ["Kyle Starkey"], "date": "2026-10-22"},
+            {"ade_id": "3", "title": "Other", "lineup": ["Nobody"]}]
+    for r in rows:
+        conn.execute("INSERT INTO ade_snapshots (ade_id, json, updated_at) VALUES (?,?,?)",
+                     (r["ade_id"], _json.dumps(r), "x"))
+    text = ade.report(ctx, conn)
+    assert "3 events known, 1 read in detail" in text
+    assert "GOLD: pop-up + must-see: 1\n- Secret Location pop-up" in text
+    assert "Must-see artist: 1\n- Big Night" in text

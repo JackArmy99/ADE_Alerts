@@ -676,3 +676,40 @@ def discover(ctx: Context) -> Path:
     else:
         print("No JSON endpoint with events found; the HTML fallback will be used.")
     return out
+
+
+# ---- report ------------------------------------------------------------------
+
+def report(ctx: Context, conn) -> str:
+    """Programme events with the group's artists, pop-ups first. Pop-up = a popup_keywords term (taste.yaml)
+    in the event's title or listing text; the ADE site rarely says it, so Instagram stays the main pop-up source."""
+    from ..match import popup_regex
+    from ..normalize import pretty_when
+
+    matcher = Matcher(ctx.taste, ctx.accounts)
+    popup = popup_regex(ctx.taste)
+    groups: dict[str, list[str]] = {"GOLD: pop-up + must-see": [], "Pop-up + liked artist": [],
+                                    "Must-see artist": [], "Liked artist": []}
+    total = read = 0
+    for r in conn.execute("SELECT json FROM ade_snapshots"):
+        ev = json.loads(r["json"])
+        total += 1
+        read += bool(ev.get("fetched_at"))
+        m = _persons(matcher, ev)
+        hits = {h.name: h.level for hs in m.hits.values() for h in hs if h.level in ("must_see", "like")}
+        if not hits:
+            continue
+        must = sorted(n for n, lv in hits.items() if lv == "must_see")
+        like = sorted(n for n, lv in hits.items() if lv == "like")
+        is_popup = bool(popup.search(" ".join([ev.get("title", ""), ev.get("card_text", "")])))
+        key = ("GOLD: pop-up + must-see" if is_popup and must else "Pop-up + liked artist" if is_popup
+               else "Must-see artist" if must else "Liked artist")
+        line = (f"- {ev.get('title') or ev.get('ade_id')} | {pretty_when(ev.get('date'), ev.get('time'))} | "
+                f"{ev.get('venue') or 'TBA'} | {', '.join(must + like)}"
+                f"{' | SOLD OUT' if ev.get('sold_out') else ''}\n  {ev.get('url', '')}")
+        groups[key].append((ev.get("date") or "9999", line))
+    out = [f"ADE programme: {total} events known, {read} read in detail."]
+    for name, rows in groups.items():
+        out.append(f"\n{name}: {len(rows)}")
+        out += [line for _, line in sorted(rows)]
+    return "\n".join(out)
