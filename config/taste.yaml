@@ -34,6 +34,7 @@ people:
       - Bella Claxton
       - LAMMER
       - Dart
+      - Nina Kraviz
     like:              # alert if on an ADE lineup
       - Eli Brown
       - Joshwa
@@ -97,28 +98,9 @@ people:
     genres_avoid: []   # fill in if needed, e.g. hardstyle, trance
     venues_like: [Gashouder, Thuishaven, NDSM Warehouse, Kromhouthal, Pllek, A'DAM Toren, Mediahaven]
 
-  # Fill in the other four. Copy the structure above.
-  # Mc shares Jack's taste for now (YAML alias). To give Mc their own list later, replace "*jack"
-  # with a block like Jack's above.
+  # Everyone in RECIPIENT_NAMES (.env) without their own block here gets Jack's taste automatically.
+  # To give someone their own list, add a block like Jack's above under their name.
   mc: *jack
-  friend2:
-    must_see: []
-    like: []
-    brands_like: []
-    genres_like: []
-    genres_avoid: []
-  friend3:
-    must_see: []
-    like: []
-    brands_like: []
-    genres_like: []
-    genres_avoid: []
-  friend4:
-    must_see: []
-    like: []
-    brands_like: []
-    genres_like: []
-    genres_avoid: []
 
 aliases:
   "X CLUB.": ["x club", "xclub"]
