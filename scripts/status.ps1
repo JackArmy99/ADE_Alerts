@@ -12,6 +12,8 @@ Get-ScheduledTask -TaskPath "\ADE Radar\" -ErrorAction SilentlyContinue | ForEac
     }
 } | Format-Table -AutoSize
 
+Write-Host "--- last run summaries (data\logs\summary.log) ---"
+if (Test-Path data\logs\summary.log) { Get-Content data\logs\summary.log -Tail 16 }
 Write-Host "--- data\logs\radar.log (last 25 lines) ---"
 if (Test-Path data\logs\radar.log) { Get-Content data\logs\radar.log -Tail 25 }
 Write-Host "--- ade-radar status ---"

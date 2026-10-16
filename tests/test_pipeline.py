@@ -128,3 +128,17 @@ def test_cli_source_list():
     assert _sources("all") == ["instagram", "gmail", "ade"]
     with pytest.raises(argparse.ArgumentTypeError):
         _sources("instagram,nope")
+
+
+def test_run_summary_is_readable(ctx):
+    from ade_radar.cli import run_summary
+    ig = {"ok": True, "posts_checked": 6, "posts_new": 2, "story_frames": 12, "stories_new": 5,
+          "story_stop": "viewer closed (all stories watched)", "alerts_sent": 1, "claude_calls": 7,
+          "claude_cost_eur": 0.003}
+    gm = {"ok": False, "error": "IMAP login failed"}
+    ade_ = {"ok": True, "skipped_rate_limit": 0, "events_listed": 1459, "events_fetched": 100}
+    text = run_summary(ctx, [("instagram", ig), ("gmail", gm), ("ade", ade_)])
+    assert "PROBLEM" in text and "gmail     FAILED: IMAP login failed" in text
+    assert "6 posts checked (2 new), 12 stories viewed (5 new)" in text
+    assert "1 WhatsApp alerts sent" in text and "1459 events listed" in text
+    assert "ALL OK" in run_summary(ctx, [("instagram", {"ok": True, "skipped_rate_limit": 1})])

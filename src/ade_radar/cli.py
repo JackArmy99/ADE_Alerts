@@ -75,14 +75,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "run":
         from .pipeline import run_source
-        ok, summary = True, []
+        ok, results = True, []
         for src in args.source:
             res = run_source(ctx, src, dry_run=args.dry_run, force=args.force, full=args.full)
-            print(f"{src}: {json.dumps(res, sort_keys=True)}")
+            logging.getLogger(__name__).debug("%s: %s", src, json.dumps(res, sort_keys=True))
             ok &= res["ok"]
-            summary.append(_summary_line(src, res))
-        if len(args.source) > 1:
-            print("\n=== summary ===\n" + "\n".join(summary))
+            results.append((src, res))
+        text = run_summary(ctx, results, dry_run=args.dry_run)
+        print("\n" + text)
+        if not args.dry_run:  # every real (scheduled) run, so you can look back: data\logs\summary.log
+            s.logs_dir.mkdir(parents=True, exist_ok=True)
+            with open(s.logs_dir / "summary.log", "a", encoding="utf-8") as fh:
+                fh.write(text + "\n\n")
         return 0 if ok else 1
     if args.cmd == "test-whatsapp":
         from .tools.check_template import test_whatsapp
@@ -153,13 +157,48 @@ def _sources(value: str) -> list[str]:
 def _summary_line(src: str, r: dict) -> str:
     if not r.get("ok"):
         return f"{src:9} FAILED: {r.get('error', '')[:120]}"
-    found = {"instagram": f"{r.get('posts_new', 0)} posts, {r.get('stories_new', 0)} stories",
-             "gmail": f"{r.get('mails_new', 0)} mails ({r.get('mails_security_skipped', 0)} security skipped)",
-             "ade": f"{r.get('events_listed', 0)} events listed"}.get(src, "")
-    alerts = r.get("alerts_sent", 0) + r.get("alerts_dry_run", 0)
-    return (f"{src:9} ok: {found}; {r.get('new_items', 0)} new, {alerts} alerts"
-            f"{' (dry run)' if r.get('alerts_dry_run') else ''}, {r.get('teasers', 0)} teasers, "
-            f"{r.get('claude_calls', 0)} Claude calls")
+    if r.get("skipped_rate_limit"):
+        return f"{src:9} skipped: checked less than 25 min ago (OK, next scheduled run does it)"
+    if src == "instagram":
+        stop = r.get("story_stop", "")
+        found = (f"{r.get('posts_checked', 0)} posts checked ({r.get('posts_new', 0)} new), "
+                 f"{r.get('story_frames', 0)} stories viewed ({r.get('stories_new', 0)} new)"
+                 + (f", stories: {stop}" if stop else ""))
+    elif src == "gmail":
+        found = f"{r.get('mails_found', 0)} mails in the label, {r.get('mails_new', 0)} new"
+    elif src == "ade":
+        found = (f"{r.get('events_listed', 0)} events listed, {r.get('events_fetched', 0)} event pages read, "
+                 f"{r.get('changes_alerted', 0)} changes")
+    else:
+        found = ""
+    sent, failed, dry = r.get("alerts_sent", 0), r.get("alerts_failed", 0), r.get("alerts_dry_run", 0)
+    alerts = f"{dry} alerts (dry run, not sent)" if dry else f"{sent} WhatsApp alerts sent"
+    if failed:
+        alerts += f", {failed} FAILED to send"
+    return (f"{src:9} OK: {found}\n{'':11}{alerts}, {r.get('teasers', 0)} for the digest, "
+            f"{r.get('claude_calls', 0)} Claude checks (EUR {r.get('claude_cost_eur', 0):.3f})")
+
+
+def run_summary(ctx, results: list[tuple[str, dict]], dry_run: bool = False) -> str:
+    """Readable result of a run: did each source work, what was found, what was sent, what it cost."""
+    from datetime import datetime
+    from . import db
+    from .config import TZ
+
+    ok = all(r.get("ok") for _, r in results)
+    head = (f"=== ade-radar run {datetime.now(TZ):%a %d %b %H:%M}"
+            f"{' (DRY RUN)' if dry_run else ''}: {'ALL OK' if ok else 'PROBLEM'} ===")
+    lines = [head, *(_summary_line(src, r) for src, r in results)]
+    try:
+        conn = db.connect(ctx.settings.db_path)
+        today, total = db.spend_so_far(conn)
+        conn.close()
+        s = ctx.settings
+        lines.append(f"Claude spend: EUR {today:.2f} today (cap {s.claude_budget_daily:.2f}), "
+                     f"EUR {total:.2f} in total (cap {s.claude_budget_total:.2f})")
+    except Exception:  # noqa: BLE001 - the summary must never fail the run
+        pass
+    return "\n".join(lines)
 
 
 def status(ctx) -> int:
