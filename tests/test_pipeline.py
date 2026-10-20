@@ -142,3 +142,20 @@ def test_run_summary_is_readable(ctx):
     assert "6 posts checked (2 new), 12 stories viewed (5 new)" in text
     assert "1 WhatsApp alerts sent" in text and "1459 events listed" in text
     assert "ALL OK" in run_summary(ctx, [("instagram", {"ok": True, "skipped_rate_limit": 1})])
+
+
+def test_dry_run_copy_never_locks_the_real_database(ctx):
+    from ade_radar import db
+    real = db.connect(ctx.settings.db_path)
+    db.kv_set(real, "x", "1")
+    real.commit()
+    real.close()
+    copy = db.connect(db.dry_run_copy(ctx.settings.db_path))
+    db.kv_set(copy, "x", "dry")  # open write transaction on the copy, like a dry run in progress
+    other = db.connect(ctx.settings.db_path)  # a scheduled run at the same time
+    db.kv_set(other, "x", "2")
+    other.commit()  # would wait/fail with 'database is locked' if the dry run used the real file
+    assert db.kv_get(other, "x") == "2"
+    copy.rollback()
+    copy.close()
+    other.close()

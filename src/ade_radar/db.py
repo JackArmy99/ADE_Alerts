@@ -95,13 +95,28 @@ CREATE TABLE IF NOT EXISTS kv (
 """
 
 
+def dry_run_copy(path: Path) -> Path:
+    """Snapshot of the database for a dry run, so a dry run never locks the real one (scheduled runs keep going)."""
+    copy = path.with_name("dryrun.sqlite")
+    for p in (copy, copy.with_name(copy.name + "-wal"), copy.with_name(copy.name + "-shm")):
+        p.unlink(missing_ok=True)
+    src = connect(path)
+    dst = sqlite3.connect(str(copy))
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    return copy
+
+
 def connect(path: Path | str) -> sqlite3.Connection:
     if str(path) != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path), timeout=30)
+    conn = sqlite3.connect(str(path), timeout=90)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA busy_timeout=90000")
     conn.executescript(SCHEMA)
     _migrate(conn)
     conn.commit()

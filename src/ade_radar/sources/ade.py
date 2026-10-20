@@ -526,6 +526,8 @@ def _run(ctx: Context, conn, counts: dict, f, *, wa, stats: AlertStats, dry_run:
         conn.execute("INSERT INTO ade_snapshots (ade_id, json, updated_at) VALUES (?,?,?) ON CONFLICT(ade_id)"
                      " DO UPDATE SET json=excluded.json, updated_at=excluded.updated_at",
                      (ev["ade_id"], json.dumps(merged, ensure_ascii=False, sort_keys=True), db.ts()))
+        if not dry_run:
+            conn.commit()  # never hold the database while the next page downloads (other runs wait on it)
         if full or not m.persons or not changes:
             continue  # the full scan only records the programme; it never sends anything
         for change in changes:

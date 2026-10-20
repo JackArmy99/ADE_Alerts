@@ -71,9 +71,10 @@ def _process_one(conn, ctx: Context, item: Item, matcher: Matcher, today: str, *
 
 
 def run_source(ctx: Context, source: str, dry_run: bool = False, force: bool = False, full: bool = False) -> dict:
-    """Runs one source with run bookkeeping. Dry runs roll back all DB writes except the run record."""
+    """Runs one source with run bookkeeping. Dry runs work on a copy of the database (data/dryrun.sqlite), so they
+    change nothing and never block the scheduled runs; only the Claude spend is added to the real database."""
     s = ctx.settings
-    conn = db.connect(s.db_path)
+    conn = db.connect(db.dry_run_copy(s.db_path) if dry_run else s.db_path)
     run_id = db.start_run(conn, source)
     counts: dict = {}
     stats = AlertStats()
@@ -117,7 +118,13 @@ def run_source(ctx: Context, source: str, dry_run: bool = False, force: bool = F
             log.error("retrying failed alerts failed:\n%s", traceback.format_exc())
     counts.update({"alerts_" + k: v for k, v in stats.as_dict().items()})
     counts.update({"claude_" + k: v for k, v in classifier.usage.as_dict().items()})
-    db.add_spend(conn, classifier.usage.cost)  # real money, also in dry runs
+    if dry_run:  # real money, also in dry runs: count it in the real database
+        real = db.connect(s.db_path)
+        db.add_spend(real, classifier.usage.cost)
+        real.commit()
+        real.close()
+    else:
+        db.add_spend(conn, classifier.usage.cost)
     conn.commit()
     _budget_notices(conn, ctx, classifier, dry_run)
     db.finish_run(conn, run_id, ok, counts, error)
